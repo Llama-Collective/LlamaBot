@@ -1469,7 +1469,7 @@ export class RepositoryManager {
 
             if (details) {
                 if (details.message) {
-                    commitMessage = details.message;
+                    commitMessage = `${newEntryData.code}: ${details.message}`;
                 }
 
                 if (details.detailedDescription) {
