@@ -44,7 +44,7 @@ export class DictionaryEditCommand implements Command {
             )
             .addSubcommand(sub =>
                 sub
-                    .setName('closeposts')
+                    .setName('closedictionary')
                     .setDescription('Close all open dictionary threads')
             );
         return data;
@@ -149,7 +149,7 @@ export class DictionaryEditCommand implements Command {
             return;
         }
 
-        if (subcommand === 'closeposts') {
+        if (subcommand === 'closedictionary') {
             if (!isEditor(interaction, guildHolder) && !isModerator(interaction)) {
                 await replyEphemeral(interaction, 'You do not have permission to use this command.');
                 return;
@@ -172,6 +172,9 @@ export class DictionaryEditCommand implements Command {
                 }
 
                 try {
+                    if (thread.flags.has("Pinned")) {
+                        continue;
+                    }
                     await thread.setArchived(true, 'Closing dictionary thread via closeposts command');
                 } catch (error) {
                     console.error(`Error closing dictionary thread ${thread.name} (${thread.id}):`, error);

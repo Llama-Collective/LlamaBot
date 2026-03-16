@@ -87,7 +87,7 @@ export class EditorPowersCommand implements Command {
                             .setDescription('Optional detailed description of changes made')
                     )
                     .addBooleanOption(option =>
-                         option.setName('images')
+                        option.setName('images')
                             .setDescription('Reprocess images during publishing')
                     )
                     .addBooleanOption(option =>
@@ -378,6 +378,10 @@ export class EditorPowersCommand implements Command {
             const threads = await channel.threads.fetchActive();
             for (const thread of threads.threads.values()) {
                 try {
+                    // check if pinned
+                    if (thread.flags.has("Pinned")) {
+                        continue;
+                    }
                     await thread.setArchived(true, 'Closing thread as part of closeEverything command');
                 } catch (error) {
                     console.error(`Error closing thread ${thread.name} (${thread.id}):`, error);
@@ -412,6 +416,11 @@ export class EditorPowersCommand implements Command {
             }
 
             try {
+                // check if pinned
+                if (thread.flags.has("Pinned")) {
+                    continue;
+                }
+
                 await thread.setArchived(true, 'Closing submission as part of closeEverything command');
             } catch (error) {
                 console.error(`Error closing submission ${thread.name} (${thread.id}):`, error);
