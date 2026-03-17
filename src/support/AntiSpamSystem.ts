@@ -1,4 +1,4 @@
-import { ActionRowBuilder, Attachment, ButtonBuilder, ButtonInteraction, EmbedBuilder, Message, MessageFlags, Snowflake } from "discord.js";
+import { ActionRowBuilder, Attachment, ButtonBuilder, ButtonInteraction, EmbedBuilder, GuildTextBasedChannel, Message, MessageFlags, Snowflake, TextBasedChannel } from "discord.js";
 import type { GuildHolder } from "../GuildHolder.js";
 import { GuildConfigs } from "../config/GuildConfigs.js";
 import { NotABotButton } from "../components/buttons/NotABotButton.js";
@@ -8,6 +8,7 @@ import { AttachmentsState, UserData } from "./UserData.js";
 import { replyEphemeral, truncateStringWithEllipsis } from "../utils/Util.js";
 
 type PendingSpamUser = {
+    state: 'warned' | 'verifying' | 'timing_out';
     messageRefs: Set<string>;
     timeoutHandle?: ReturnType<typeof setTimeout>;
 };
@@ -25,6 +26,7 @@ export class AntiSpamSystem {
         let pendingUser = this.pendingSpamUsers.get(userId);
         if (!pendingUser) {
             pendingUser = {
+                state: 'warned',
                 messageRefs: new Set<string>(),
             };
             this.pendingSpamUsers.set(userId, pendingUser);
@@ -62,6 +64,54 @@ export class AntiSpamSystem {
         }
     }
 
+    private async deleteMessageWithRetry(message: Message, context: string): Promise<boolean> {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                await message.delete();
+                return true;
+            } catch (error) {
+                if (attempt === 2) {
+                    console.error(`Failed to delete message ${message.id} (${context}) after retry:`, error);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private async deleteMessageByRefWithRetry(channel: TextBasedChannel, messageId: Snowflake, context: string): Promise<Message | null> {
+        const msg = await channel.messages.fetch(messageId).catch(() => null);
+        if (!msg) {
+            return null;
+        }
+
+        await this.deleteMessageWithRetry(msg, context);
+        return msg;
+    }
+
+    private async bulkDeleteWithFallback(channel: GuildTextBasedChannel, messageIds: Snowflake[], context: string): Promise<number> {
+        if (messageIds.length === 0) {
+            return 0;
+        }
+
+        try {
+            const deleted = await channel.bulkDelete(messageIds, true);
+            return deleted.size;
+        } catch (error) {
+            console.error(`Bulk delete failed in ${context}, retrying individually:`, error);
+        }
+
+        let deletedCount = 0;
+        for (const messageId of messageIds) {
+            const deletedMessage = await this.deleteMessageByRefWithRetry(channel, messageId, `${context} fallback`);
+            if (deletedMessage) {
+                deletedCount++;
+            }
+        }
+
+        return deletedCount;
+    }
+
     public async handleMessage(message: Message): Promise<boolean> {
         if (await this.handleSpamCheck(message)) {
             return true;
@@ -81,11 +131,24 @@ export class AntiSpamSystem {
             return;
         }
 
-        this.clearPendingSpamUser(interaction.user.id);
+        const pendingUser = this.pendingSpamUsers.get(interaction.user.id);
+        const previousPendingState = pendingUser?.state;
+        if (pendingUser) {
+            pendingUser.state = 'verifying';
+        }
+
         userData.attachmentsAllowedState = AttachmentsState.ALLOWED;
         userData.messagesToDeleteOnTimeout = [];
         userData.attachmentsAllowedExpiry = Date.now() + (6 * 30 * 24 * 60 * 60 * 1000);
-        await this.guildHolder.getUserManager().saveUserData(userData);
+        try {
+            await this.guildHolder.getUserManager().saveUserData(userData);
+        } catch (error) {
+            if (pendingUser && previousPendingState) {
+                pendingUser.state = previousPendingState;
+            }
+            throw error;
+        }
+        this.clearPendingSpamUser(interaction.user.id);
 
         await interaction.reply({
             content: `Thank you for confirming you're not a bot! You can now send messages with attachments or links.`,
@@ -93,13 +156,19 @@ export class AntiSpamSystem {
         });
 
         if (interaction.user.id === userID) {
-            await interaction.message.delete();
+            await this.deleteMessageWithRetry(interaction.message as Message, 'verification prompt cleanup');
         }
     }
 
     public async timeoutUserForSpam(userData: UserData, autoTimeout: boolean = false) {
         this.mergePendingMessageRefs(userData);
-        this.clearPendingSpamUser(userData.id);
+
+        const pendingUser = this.getOrCreatePendingSpamUser(userData.id);
+        pendingUser.state = 'timing_out';
+        if (pendingUser.timeoutHandle) {
+            clearTimeout(pendingUser.timeoutHandle);
+            pendingUser.timeoutHandle = undefined;
+        }
 
         const guild = this.guildHolder.getGuild();
         const member = await guild.members.fetch(userData.id).catch(() => null);
@@ -110,6 +179,7 @@ export class AntiSpamSystem {
             );
 
         if (!member) {
+            this.clearPendingSpamUser(userData.id);
             return;
         }
 
@@ -127,6 +197,7 @@ export class AntiSpamSystem {
             if (modChannel && modChannel.isSendable()) {
                 await modChannel.send({ embeds: [embed], components: [actionRow as any], flags: [MessageFlags.SuppressNotifications] });
             }
+            this.clearPendingSpamUser(userData.id);
             return;
         }
 
@@ -161,14 +232,20 @@ export class AntiSpamSystem {
                     }
                 }
 
-                await msg.delete().catch(() => null);
+                await this.deleteMessageWithRetry(msg, 'spam timeout cleanup');
             }
 
             userData.messagesToDeleteOnTimeout = [];
         }
 
         userData.attachmentsAllowedState = AttachmentsState.FAILED;
-        await this.guildHolder.getUserManager().saveUserData(userData);
+        try {
+            await this.guildHolder.getUserManager().saveUserData(userData);
+        } catch (error) {
+            this.clearPendingSpamUser(userData.id);
+            throw error;
+        }
+        this.clearPendingSpamUser(userData.id);
 
         const text = [`Timed out <@${userData.id}> for ${autoTimeout ? `not verifying within the allotted time` : `sending links/attachments again after warning`}.`];
         if (offendingMessage) {
@@ -213,7 +290,17 @@ export class AntiSpamSystem {
         const pendingSpamUser = this.pendingSpamUsers.get(message.author.id);
         if (pendingSpamUser) {
             pendingSpamUser.messageRefs.add(this.getMessageRef(message));
-            await message.delete().catch(() => null);
+
+            if (pendingSpamUser.state === 'verifying') {
+                return false;
+            }
+
+            await this.deleteMessageWithRetry(message, 'pending spam cleanup');
+
+            if (pendingSpamUser.state === 'timing_out') {
+                return true;
+            }
+
             const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
             await this.timeoutUserForSpam(userData);
             return true;
@@ -237,13 +324,14 @@ export class AntiSpamSystem {
         if (userData.attachmentsAllowedState === AttachmentsState.WARNED) {
             const pendingUser = this.getOrCreatePendingSpamUser(message.author.id);
             pendingUser.messageRefs.add(this.getMessageRef(message));
-            await message.delete().catch(() => null);
+            await this.deleteMessageWithRetry(message, 'warned spam cleanup');
             await this.timeoutUserForSpam(userData);
             return true;
         }
 
         const spamContent = hasAttachment && hasUrl ? 'attachments and links' : hasAttachment ? 'attachments' : 'links';
         const pendingUser = this.getOrCreatePendingSpamUser(message.author.id);
+        pendingUser.state = 'warned';
         pendingUser.messageRefs.add(this.getMessageRef(message));
 
         const embed = new EmbedBuilder()
@@ -255,17 +343,22 @@ export class AntiSpamSystem {
             );
         const row = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(new NotABotButton().getBuilder(message.author.id));
-        const warningMsg = await message.reply({ embeds: [embed], components: [row as any], flags: [MessageFlags.SuppressNotifications] });
-        pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
+        try {
+            const warningMsg = await message.reply({ embeds: [embed], components: [row as any], flags: [MessageFlags.SuppressNotifications] });
+            pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
 
-        userData.attachmentsAllowedState = AttachmentsState.WARNED;
-        this.mergePendingMessageRefs(userData);
+            userData.attachmentsAllowedState = AttachmentsState.WARNED;
+            this.mergePendingMessageRefs(userData);
 
-        await this.guildHolder.getUserManager().saveUserData(userData);
+            await this.guildHolder.getUserManager().saveUserData(userData);
+        } catch (error) {
+            this.clearPendingSpamUser(message.author.id);
+            throw error;
+        }
 
         pendingUser.timeoutHandle = setTimeout(async () => {
             const currentPendingUser = this.pendingSpamUsers.get(userData.id);
-            if (currentPendingUser !== pendingUser) {
+            if (currentPendingUser !== pendingUser || currentPendingUser.state !== 'warned') {
                 return;
             }
 
@@ -320,7 +413,7 @@ export class AntiSpamSystem {
                 return true;
             }
 
-            await message.delete();
+            await this.deleteMessageWithRetry(message, 'honeypot trigger');
 
             let deletedMessages = 1;
             await guild.channels.cache.reduce(async (acc, channel) => {
@@ -330,9 +423,8 @@ export class AntiSpamSystem {
                     const userMessages = fetchedMessages.filter(m => m.author.id === message.author.id && m.createdAt > new Date(Date.now() - 60 * 60 * 1000));
                     const messagesToDelete = userMessages.map(m => m.id);
                     if (messagesToDelete.length > 0) {
-                        await channel.bulkDelete(messagesToDelete, true).catch(console.error);
+                        deletedMessages += await this.bulkDeleteWithFallback(channel, messagesToDelete, `honeypot cleanup in channel ${channel.id}`);
                     }
-                    deletedMessages += messagesToDelete.length;
                 }
             }, Promise.resolve()).catch(console.error);
 
