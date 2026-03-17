@@ -7,8 +7,60 @@ import { LiftTimeoutButton } from "../components/buttons/LiftTimeoutButton.js";
 import { AttachmentsState, UserData } from "./UserData.js";
 import { replyEphemeral, truncateStringWithEllipsis } from "../utils/Util.js";
 
+type PendingSpamUser = {
+    messageRefs: Set<string>;
+    timeoutHandle?: ReturnType<typeof setTimeout>;
+};
+
 export class AntiSpamSystem {
+    private pendingSpamUsers = new Map<Snowflake, PendingSpamUser>();
+
     constructor(private guildHolder: GuildHolder) {}
+
+    private getMessageRef(message: Message | { channel: { id: Snowflake }, id: Snowflake }): string {
+        return [message.channel.id, message.id].join('-');
+    }
+
+    private getOrCreatePendingSpamUser(userId: Snowflake): PendingSpamUser {
+        let pendingUser = this.pendingSpamUsers.get(userId);
+        if (!pendingUser) {
+            pendingUser = {
+                messageRefs: new Set<string>(),
+            };
+            this.pendingSpamUsers.set(userId, pendingUser);
+        }
+        return pendingUser;
+    }
+
+    private clearPendingSpamUser(userId: Snowflake) {
+        const pendingUser = this.pendingSpamUsers.get(userId);
+        if (!pendingUser) {
+            return;
+        }
+
+        if (pendingUser.timeoutHandle) {
+            clearTimeout(pendingUser.timeoutHandle);
+        }
+
+        this.pendingSpamUsers.delete(userId);
+    }
+
+    private mergePendingMessageRefs(userData: UserData) {
+        const pendingUser = this.pendingSpamUsers.get(userData.id);
+        if (!pendingUser) {
+            return;
+        }
+
+        if (!userData.messagesToDeleteOnTimeout) {
+            userData.messagesToDeleteOnTimeout = [];
+        }
+
+        for (const messageRef of pendingUser.messageRefs) {
+            if (!userData.messagesToDeleteOnTimeout.includes(messageRef)) {
+                userData.messagesToDeleteOnTimeout.push(messageRef);
+            }
+        }
+    }
 
     public async handleMessage(message: Message): Promise<boolean> {
         if (await this.handleSpamCheck(message)) {
@@ -29,6 +81,7 @@ export class AntiSpamSystem {
             return;
         }
 
+        this.clearPendingSpamUser(interaction.user.id);
         userData.attachmentsAllowedState = AttachmentsState.ALLOWED;
         userData.messagesToDeleteOnTimeout = [];
         userData.attachmentsAllowedExpiry = Date.now() + (6 * 30 * 24 * 60 * 60 * 1000);
@@ -45,6 +98,9 @@ export class AntiSpamSystem {
     }
 
     public async timeoutUserForSpam(userData: UserData, autoTimeout: boolean = false) {
+        this.mergePendingMessageRefs(userData);
+        this.clearPendingSpamUser(userData.id);
+
         const guild = this.guildHolder.getGuild();
         const member = await guild.members.fetch(userData.id).catch(() => null);
         const actionRow = new ActionRowBuilder<ButtonBuilder>()
@@ -154,6 +210,15 @@ export class AntiSpamSystem {
             return false;
         }
 
+        const pendingSpamUser = this.pendingSpamUsers.get(message.author.id);
+        if (pendingSpamUser) {
+            pendingSpamUser.messageRefs.add(this.getMessageRef(message));
+            await message.delete().catch(() => null);
+            const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
+            await this.timeoutUserForSpam(userData);
+            return true;
+        }
+
         const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
         if (userData.attachmentsAllowedState === AttachmentsState.ALLOWED) {
             const now = Date.now();
@@ -170,12 +235,17 @@ export class AntiSpamSystem {
         }
 
         if (userData.attachmentsAllowedState === AttachmentsState.WARNED) {
-            await message.delete();
+            const pendingUser = this.getOrCreatePendingSpamUser(message.author.id);
+            pendingUser.messageRefs.add(this.getMessageRef(message));
+            await message.delete().catch(() => null);
             await this.timeoutUserForSpam(userData);
             return true;
         }
 
         const spamContent = hasAttachment && hasUrl ? 'attachments and links' : hasAttachment ? 'attachments' : 'links';
+        const pendingUser = this.getOrCreatePendingSpamUser(message.author.id);
+        pendingUser.messageRefs.add(this.getMessageRef(message));
+
         const embed = new EmbedBuilder()
             .setColor(0xFFFF00)
             .setTitle(`Spam Check!`)
@@ -186,18 +256,19 @@ export class AntiSpamSystem {
         const row = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(new NotABotButton().getBuilder(message.author.id));
         const warningMsg = await message.reply({ embeds: [embed], components: [row as any], flags: [MessageFlags.SuppressNotifications] });
+        pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
 
         userData.attachmentsAllowedState = AttachmentsState.WARNED;
-        if (!userData.messagesToDeleteOnTimeout) {
-            userData.messagesToDeleteOnTimeout = [];
-        }
-
-        userData.messagesToDeleteOnTimeout.push([message.channel.id, message.id].join('-'));
-        userData.messagesToDeleteOnTimeout.push([warningMsg.channel.id, warningMsg.id].join('-'));
+        this.mergePendingMessageRefs(userData);
 
         await this.guildHolder.getUserManager().saveUserData(userData);
 
-        setTimeout(async () => {
+        pendingUser.timeoutHandle = setTimeout(async () => {
+            const currentPendingUser = this.pendingSpamUsers.get(userData.id);
+            if (currentPendingUser !== pendingUser) {
+                return;
+            }
+
             const updatedUserData = await this.guildHolder.getUserManager().getUserData(userData.id);
             if (updatedUserData && updatedUserData.attachmentsAllowedState === AttachmentsState.WARNED) {
                 await this.timeoutUserForSpam(updatedUserData, true);
