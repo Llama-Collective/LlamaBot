@@ -62,6 +62,17 @@ export class AntiSpamCommand implements Command {
                             .setDescription('Clear warnings for a specific user')
                             .setRequired(true)
                     )
+            )
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('debugreset')
+                    .setDescription('Debug: reset anti-spam state for a user')
+                    .addUserOption(option =>
+                        option
+                            .setName('user')
+                            .setDescription('Reset anti-spam state for a specific user')
+                            .setRequired(true)
+                    )
             );
         return data;
     }
@@ -89,8 +100,17 @@ export class AntiSpamCommand implements Command {
             data.llmWarnings = [];
             await guildHolder.getUserManager().saveUserData(data);
             await interaction.reply(`Cleared all Llamabot warnings for ${user.tag}.`);
+        } else if (interaction.options.getSubcommand() === 'debugreset') {
+            const user = interaction.options.getUser('user');
+            if (!user) {
+                await replyEphemeral(interaction, 'Invalid user');
+                return;
+            }
+
+            await guildHolder.getAntiSpamSystem().resetUserState(user.id, user.username);
+            await interaction.reply(`Reset anti-spam state for ${user.tag}.`);
         } else {
-            await replyEphemeral(interaction, 'Invalid subcommand. Use `/antispam sethoneypot`, `/antispam setmodlog`, or `/antispam sendbotcheck`.');
+            await replyEphemeral(interaction, 'Invalid subcommand. Use `/antispam sethoneypot`, `/antispam setmodlog`, `/antispam sendbotcheck`, `/antispam clearwarnings`, or `/antispam debugreset`.');
             return;
         }
     }

@@ -124,6 +124,16 @@ export class AntiSpamSystem {
         return false;
     }
 
+    public async resetUserState(userId: Snowflake, username: string): Promise<void> {
+        this.clearPendingSpamUser(userId);
+
+        const userData = await this.guildHolder.getUserManager().getOrCreateUserData(userId, username);
+        userData.attachmentsAllowedState = AttachmentsState.DISALLOWED;
+        userData.attachmentsAllowedExpiry = 0;
+        userData.messagesToDeleteOnTimeout = [];
+        await this.guildHolder.getUserManager().saveUserData(userData);
+    }
+
     public async handleNotABotVerification(interaction: ButtonInteraction, userID: Snowflake): Promise<void> {
         const userData = await this.guildHolder.getUserManager().getOrCreateUserData(interaction.user.id, interaction.user.username);
         if (userData.attachmentsAllowedState === AttachmentsState.ALLOWED) {
