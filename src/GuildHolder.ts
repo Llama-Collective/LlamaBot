@@ -1,19 +1,18 @@
-import { ActionRowBuilder, AnyThreadChannel, ButtonBuilder, ChannelType, EmbedBuilder, Guild, GuildAuditLogsEntry, GuildMember, Message, MessageFlags, Role, PartialGuildMember, Snowflake, Attachment, GuildChannel, PartialMessage, TextChannel, TextThreadChannel, PermissionFlagsBits } from "discord.js";
+import { AnyThreadChannel, ChannelType, EmbedBuilder, Guild, GuildAuditLogsEntry, GuildMember, Message, MessageFlags, Role, PartialGuildMember, Snowflake, GuildChannel, PartialMessage, TextChannel, TextThreadChannel, PermissionFlagsBits } from "discord.js";
 import { Bot, SysAdmin } from "./Bot.js";
 import { ConfigManager } from "./config/ConfigManager.js";
 import { GuildConfigs } from "./config/GuildConfigs.js";
 import { SubmissionsManager } from "./submissions/SubmissionsManager.js";
 import { RepositoryManager } from "./archive/RepositoryManager.js";
 import { ArchiveEntry, ArchiveEntryData } from "./archive/ArchiveEntry.js";
-import { buildGithubRawContentURL, deepClone, escapeDiscordString, getAuthorName, getAuthorsString, getChanges, getCodeAndDescriptionFromTopic, getGithubOwnerAndProject, splitIntoChunks, truncateStringWithEllipsis } from "./utils/Util.js";
+import { deepClone, escapeDiscordString, getAuthorName, getAuthorsString, getChanges, getCodeAndDescriptionFromTopic, splitIntoChunks, truncateStringWithEllipsis } from "./utils/Util.js";
 import { UserManager } from "./support/UserManager.js";
-import { AttachmentsState, UserData } from "./support/UserData.js";
+import { UserData } from "./support/UserData.js";
 import { SubmissionConfigs } from "./submissions/SubmissionConfigs.js";
 import { SubmissionStatus } from "./submissions/SubmissionStatus.js";
 import fs from "fs/promises";
 import { countCharactersInRecord, getEffectiveStyle, postToMarkdown, StyleInfo } from "./utils/MarkdownUtils.js";
 import { Author, AuthorType, DiscordAuthor } from "./submissions/Author.js";
-import { NotABotButton } from "./components/buttons/NotABotButton.js";
 import { generateText, JSONSchema7, ModelMessage, Output, stepCountIs, Tool, zodSchema } from "ai";
 import { UserSubscriptionManager } from "./config/UserSubscriptionManager.js";
 import { ChannelSubscriptionManager } from "./config/ChannelSubscriptionManager.js";
@@ -27,8 +26,7 @@ import z from "zod";
 import { base64ToInt8Array, generateQueryEmbeddings } from "./llm/EmbeddingUtils.js";
 import { PrivateFactBase } from "./archive/PrivateFactBase.js";
 import { AliasManager } from "./support/AliasManager.js";
-import { LiftTimeoutButton } from "./components/buttons/LiftTimeoutButton.js";
-import { BanUserButton } from "./components/buttons/BanUserButton.js";
+import { AntiSpamSystem } from "./support/AntiSpamSystem.js";
 import { PublishCommitMessage } from "./submissions/Publish.js";
 import { safeJoinPath } from "./utils/SafePath.js";
 /**
@@ -76,6 +74,7 @@ export class GuildHolder {
     private ready: boolean = false;
 
     private antiNukeManager: AntiNukeManager;
+    private antiSpamSystem: AntiSpamSystem;
 
     private retaggingRequested: boolean = true;
 
@@ -101,6 +100,7 @@ export class GuildHolder {
         this.guild = guild;
         this.globalDiscordServersDictionary = globalDiscordServersDictionary;
         this.antiNukeManager = new AntiNukeManager(this);
+        this.antiSpamSystem = new AntiSpamSystem(this);
         this.config = new ConfigManager(safeJoinPath(this.getGuildFolder(), 'config.json'));
         this.submissions = new SubmissionsManager(this, safeJoinPath(this.getGuildFolder(), 'submissions'));
         this.repositoryManager = new RepositoryManager(this, safeJoinPath(this.getGuildFolder(), 'archive'), this.globalDiscordServersDictionary);
@@ -273,10 +273,7 @@ export class GuildHolder {
             }
         }
 
-        // handle anti spam
-        if (await this.handleSpamCheck(message)) {
-            return;
-        }
+        if (await this.antiSpamSystem.handleMessage(message)) return;
 
         await this.handleMessageReferences(message).catch(e => {
             console.error('Error handling post references:', e);
@@ -285,83 +282,6 @@ export class GuildHolder {
         await this.handleThanks(message).catch(e => {
             console.error('Error handling thanks message:', e);
         });
-
-        // Handle honeypot channel
-        const honeypotChannelId = this.getConfigManager().getConfig(GuildConfigs.HONEYPOT_CHANNEL_ID);
-        if (honeypotChannelId && message.channel.id === honeypotChannelId) {
-            // Timeout the user permanently
-            const member = await this.guild.members.fetch(message.author.id).catch(() => null);
-            if (member) {
-                try {
-                    // Check if has perms
-                    if (!member.manageable) {
-                        const embed = new EmbedBuilder()
-                        embed.setColor(0xFF0000) // Red color for honeypot message
-                        embed.setTitle(`Honeypot Triggered!`)
-                        embed.setDescription(`Unfortunately, <@${message.author.id}> is immune to honeypot timeouts because I cannot manage their role.`);
-                        embed.setFooter({ text: `This is a honeypot channel to catch spammers.` });
-                        if (message.channel.isSendable()) {
-                            await message.channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
-                        }
-                        return;
-                    }
-                    try {
-                        const duration = 28 * 24 * 60 * 60 * 1000; // 28 days in milliseconds
-                        await member.timeout(duration, 'Honeypot');
-                    } catch (e: any) {
-                        console.error(e);
-                        const embed = new EmbedBuilder()
-                        embed.setColor(0xFF0000) // Red color for honeypot message
-                        embed.setTitle(`Honeypot Triggered!`)
-                        embed.setDescription(`Unfortunately, <@${message.author.id}> is immune to honeypot because I do not have permission to timeout them.`);
-                        embed.setFooter({ text: `This is a honeypot channel to catch spammers.` });
-                        if (message.channel.isSendable()) {
-                            await message.channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
-                        }
-                        return;
-                    }
-                    await message.delete();
-
-                    // delete all messages sent by the user in past hour in every channel
-                    let deletedMessages = 1;
-                    await this.guild.channels.cache.reduce(async (acc, channel) => {
-                        if (channel.isTextBased() && !channel.isThread()) {
-                            const fetchedMessages = await channel.messages.fetch({ limit: 100 });
-                            const userMessages = fetchedMessages.filter(m => m.author.id === message.author.id && m.createdAt > new Date(Date.now() - 60 * 60 * 1000));
-                            const messagesToDelete = userMessages.map(m => m.id);
-                            if (messagesToDelete.length > 0) {
-                                await channel.bulkDelete(messagesToDelete, true).catch(console.error);
-                            }
-                            deletedMessages += messagesToDelete.length;
-                        }
-                        return acc;
-                    }, Promise.resolve()).catch(console.error);
-
-                    const embed = new EmbedBuilder()
-                        .setColor(0xFF0000) // Red color for honeypot message
-                        .setTitle(`Honeypot Triggered!`)
-                        .setDescription(`Timed out <@${message.author.id}> for sending a message in the honeypot channel and deleted ${deletedMessages} of their messages in the past hour.`)
-                        .setFooter({ text: `This is a honeypot channel to catch spammers.` });
-                    // send a message to the honeypot channel
-                    if (message.channel.isSendable()) {
-                        await message.channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
-                    }
-                } catch (e: any) {
-                    console.error(`Failed to timeout member ${message.author.id} in guild ${this.guild.name}:`, e);
-                    // try {
-                    //     // Send an error message to the honeypot channel
-                    //     if (message.channel.isSendable()) {
-                    //         await message.channel.send(`Failed to timeout <@${message.author.id}>. Error: ${escapeDiscordString(e.message)}, stack: ${e.stack}`);
-                    //     }
-                    // } catch (e) {
-                    //     console.error(`Failed to send error message to honeypot channel:`, e);
-                    // }
-                }
-            } else {
-                console.warn(`Member ${message.author.id} not found in guild ${this.guild.name}`);
-            }
-            return;
-        }
 
         const llmEnabled = this.getConfigManager().getConfig(GuildConfigs.CONVERSATIONAL_LLM_ENABLED);
         const llmChannel = this.getConfigManager().getConfig(GuildConfigs.CONVERSATIONAL_LLM_CHANNEL);
@@ -689,172 +609,6 @@ export class GuildHolder {
                 }
             }).catch(console.error);
         }
-    }
-
-    public async timeoutUserForSpam(userData: UserData, autoTimeout: boolean = false) {
-        const member = await this.guild.members.fetch(userData.id).catch(() => null);
-        const actionRow = new ActionRowBuilder<ButtonBuilder>()
-            .addComponents(
-                new LiftTimeoutButton().getBuilder(userData.id),
-                new BanUserButton().getBuilder(userData.id),
-            );
-        if (member) {
-            try {
-                const duration = 28 * 24 * 60 * 60 * 1000; // 28 days in milliseconds
-                await member.timeout(duration, 'Link/attachment spam - repeat offender');
-            } catch (e: any) {
-                console.error(e);
-                const embed = new EmbedBuilder()
-                embed.setColor(0xFF0000) // Red color for honeypot message
-                embed.setTitle(`Failed to Timeout!`)
-                embed.setDescription(`Tried to timeout <@${userData.id}> for link/attachment spam, but I do not have permission to timeout them.`);
-
-                const modChannel = await this.guild.channels.fetch(this.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)).catch(() => null);
-                if (modChannel && modChannel.isSendable()) {
-                    await modChannel.send({ embeds: [embed], components: [actionRow as any], flags: [MessageFlags.SuppressNotifications] });
-                }
-                return;
-            }
-
-            let offendingMessage: {
-                content: string;
-                files: Attachment[];
-            } | null = null;
-
-            if (userData.messagesToDeleteOnTimeout) {
-                for (let i = 0; i < userData.messagesToDeleteOnTimeout.length; i++) {
-                    const msgId = userData.messagesToDeleteOnTimeout[i];
-                    const [channelId, messageId] = msgId.split('-');
-                    const channel = await this.guild.channels.fetch(channelId).catch(() => null);
-                    if (!channel || !channel.isTextBased()) {
-                        continue;
-                    }
-                    const msg = await channel.messages.fetch(messageId).catch(() => null);
-
-                    if (msg) {
-                        if (i === 0) {
-                            offendingMessage = {
-                                content: msg ? msg.content : '',
-                                files: msg ? Array.from(msg.attachments.values()) : [],
-                            };
-
-                            // forward message to mod log channel
-                            const modChannel = this.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID);
-                            if (modChannel && msg.forward) {
-                                await msg.forward(modChannel).catch(() => null);
-                            }
-                        }
-
-                        await msg.delete().catch(() => null);
-                    }
-                }
-                userData.messagesToDeleteOnTimeout = [];
-            }
-
-            userData.attachmentsAllowedState = AttachmentsState.FAILED;
-
-            await this.userManager.saveUserData(userData);
-
-            const text = [`Timed out <@${userData.id}> for ${autoTimeout ? `not verifying within the allotted time` : `sending links/attachments again after warning`}.`];
-
-            if (offendingMessage) {
-                text.push(`**Offending Message:**\n${truncateStringWithEllipsis(offendingMessage.content, 2000)}`);
-                if (offendingMessage.files.length > 0) {
-                    text.push(`**Attachments:**`);
-                    for (const file of offendingMessage.files) {
-                        text.push(`"${file.name}": ${file.url}`);
-                    }
-                }
-            }
-
-            const embed = new EmbedBuilder()
-                .setColor(0xFF0000) // Red color for timeout message
-                .setTitle(`User Timed Out for Spam!`)
-                .setDescription(text.join('\n'))
-
-            const modChannel = await this.guild.channels.fetch(this.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)).catch(() => null);
-            if (modChannel && modChannel.isSendable()) {
-                await modChannel.send({ embeds: [embed], components: [actionRow as any], flags: [MessageFlags.SuppressNotifications] });
-            }
-        }
-    }
-
-    public async handleSpamCheck(message: Message): Promise<boolean> {
-        // if moderation channel is not set, skip
-        if (!this.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)) {
-            return false;
-        }
-
-        if (message.author.bot || message.system) {
-            return false;
-        }
-
-        const urlRegex = /(?:https?:\/\/|www\.)[^\s<]+/gi;
-        const urls = Array.from(message.content.matchAll(urlRegex)).map(match => match[0]);
-        const hasUrl = urls.length > 0 || message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i);
-        const hasAttachment = message.attachments.size > 0;
-
-        if (!hasAttachment && !hasUrl) {
-            return false;
-        }
-
-        const userData = await this.userManager.getOrCreateUserData(message.author.id, message.author.username);
-        if (userData.attachmentsAllowedState === AttachmentsState.ALLOWED) {
-            // check if expiry is within one month, if so, extend by 6 months
-            const now = Date.now();
-            if (!userData.attachmentsAllowedExpiry || (userData.attachmentsAllowedExpiry < now + 30 * 24 * 60 * 60 * 1000 && userData.attachmentsAllowedExpiry > now)) {
-                userData.attachmentsAllowedExpiry = now + 6 * 30 * 24 * 60 * 60 * 1000; // extend by 6 months
-                await this.userManager.saveUserData(userData);
-            }
-
-            // if expiry is past, reset to disallowed
-            if (userData.attachmentsAllowedExpiry > now) {
-                return false;
-            } else {
-                userData.attachmentsAllowedState = AttachmentsState.DISALLOWED;
-            }
-        }
-
-        // immediate timeout for repeat offenders
-        if (userData.attachmentsAllowedState === AttachmentsState.WARNED) {
-            await message.delete();
-            await this.timeoutUserForSpam(userData);
-            return true;
-        }
-
-        // First offense - warn the user, give them rules and a button to allow attachments/links
-        const spamContent = hasAttachment && hasUrl ? 'attachments and links' : hasAttachment ? 'attachments' : 'links';
-
-        const embed = new EmbedBuilder()
-            .setColor(0xFFFF00) // Yellow color for warning message
-            .setTitle(`Spam Check!`)
-            .setDescription(`Hi <@${message.author.id}>, it looks like you sent a message containing ${spamContent}. To prevent spam, attachments and links are not allowed until you verify that you're not a bot. To enable them, please click the "I am not a bot" button below. You have 5 minutes to verify before you are timed out.`)
-            .addFields(
-                { name: 'Note', value: 'You will be timed out automatically if you send attachments or links again without verifying.' },
-            );
-        const row = new ActionRowBuilder()
-            .addComponents(await new NotABotButton().getBuilder(message.author.id));
-        const warningMsg = await message.reply({ embeds: [embed], components: [row as any], flags: [MessageFlags.SuppressNotifications] });
-
-        userData.attachmentsAllowedState = AttachmentsState.WARNED;
-        if (!userData.messagesToDeleteOnTimeout) {
-            userData.messagesToDeleteOnTimeout = [];
-        }
-
-        userData.messagesToDeleteOnTimeout.push([message.channel.id, message.id].join('-'));
-        userData.messagesToDeleteOnTimeout.push([warningMsg.channel.id, warningMsg.id].join('-'));
-
-        await this.userManager.saveUserData(userData);
-
-        // five minutes later, check if user has clicked the button
-        setTimeout(async () => {
-            const updatedUserData = await this.userManager.getUserData(userData.id);
-            if (updatedUserData && updatedUserData.attachmentsAllowedState === AttachmentsState.WARNED) {
-                await this.timeoutUserForSpam(updatedUserData, true);
-            }
-        }, 5 * 60 * 1000);
-
-        return false;
     }
 
     public async handleMessageUpdate(_oldMessage: Message | PartialMessage, newMessage: Message) {
@@ -1334,6 +1088,10 @@ export class GuildHolder {
 
     public getBot(): Bot {
         return this.bot;
+    }
+
+    public getAntiSpamSystem(): AntiSpamSystem {
+        return this.antiSpamSystem;
     }
 
     public getConfigManager(): ConfigManager {
