@@ -948,6 +948,12 @@ export class Submission {
         if (authorCandidates.length === 0) { // add the owner as author if no authors found
             authorCandidates.push(channel.ownerId);
         }
+
+        // limit to 25 authors just in case
+        if (authorCandidates.length > 25) {
+            authorCandidates = authorCandidates.slice(0, 25);
+        }
+
         return await getDiscordAuthorsFromIDs(this.guildHolder, authorCandidates);
     }
 

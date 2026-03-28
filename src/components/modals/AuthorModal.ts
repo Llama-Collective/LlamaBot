@@ -119,7 +119,7 @@ export class AuthorModal implements Modal {
         }
 
         const isFirstTime = submission.getConfigManager().getConfig(SubmissionConfigs.AUTHORS) === null;
-        let authors = submission.getConfigManager().getConfig(SubmissionConfigs.AUTHORS) || [];
+        let authors = submission.getConfigManager().getConfig(SubmissionConfigs.AUTHORS) ?? await submission.getPotentialAuthorsFromMessageContent() ?? [];
         const existingAuthorIndex = authors.findIndex(a => getAuthorKey(a).substring(0, 50) === key);
         const existingAuthor = existingAuthorIndex !== -1 ? authors[existingAuthorIndex] : null;
         if (key.length && !existingAuthor) {

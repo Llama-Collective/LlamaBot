@@ -31,7 +31,7 @@ export class AddAuthorButton implements Button {
             return;
         }
 
-        const authors = submission.getConfigManager().getConfig(SubmissionConfigs.AUTHORS) || [];
+        const authors = submission.getConfigManager().getConfig(SubmissionConfigs.AUTHORS) ?? await submission.getPotentialAuthorsFromMessageContent() ?? [];
         if (authors.length >= 25) {
             replyEphemeral(interaction, 'You cannot have more than 25 authors for a submission.');
             return;
