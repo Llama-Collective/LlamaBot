@@ -191,7 +191,9 @@ export async function optimizeWorldsInZip(zipPath: string, tempDir: string, outp
     const rootExtractDir = safeJoinPath(sessionRoot, 'root');
     await fs.mkdir(rootExtractDir, { recursive: true });
 
-    const outputZipPath = outputFile ? safeResolvePath(tempRoot, outputFile) : safeJoinPath(
+    const outputZipPath = outputFile
+        ? (Path.isAbsolute(outputFile) ? safeWorkspacePath(outputFile) : safeResolvePath(tempRoot, outputFile))
+        : safeJoinPath(
         tempRoot,
         `${Path.basename(zipPath, Path.extname(zipPath)) || 'world'}-optimized-${Date.now().toString(36)}.zip`
     );
