@@ -464,7 +464,7 @@ export class GuildHolder {
 
                 for (const discordLink of internalDiscordLinks) {
                     const indexResults = getIndexEntryFromDiscordLinkReference(discordLink, index);
-                  
+
                     if (!indexResults) {
                         continue;
                     }
@@ -1775,24 +1775,28 @@ export class GuildHolder {
         //     systemPrompt += `\nThe server has the following channels: ${channelText.join(', ')}.`;
         // }
 
-        const messages = await channel.messages.fetch({ limit: contextLength });
+        let messages = await channel.messages.fetch({ limit: contextLength });
 
         // Remove messages that are not in the last 24 hours
         // const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
         //const recentMessages = messages.filter(msg => msg.createdTimestamp > oneDayAgo);
 
-        // remove messages older than 10 minutes from the most recent message
-        const mostRecentTimestamp = messages.reduce((max, msg) => Math.max(max, msg.createdTimestamp), 0);
-        const tenMinutesAgo = mostRecentTimestamp - (10 * 60 * 1000);
-        const relevantMessages = messages.filter(msg => msg.createdTimestamp >= tenMinutesAgo);
+        // check if sent in bot channel, if so, only include messages from 10 minutes ago to now to avoid long irrelevant context
+        if (channel.id === this.getConfigManager().getConfig(GuildConfigs.CONVERSATIONAL_LLM_CHANNEL)) {
+            // remove messages older than 10 minutes from the most recent message
+            const mostRecentTimestamp = messages.reduce((max, msg) => Math.max(max, msg.createdTimestamp), 0);
+            const tenMinutesAgo = mostRecentTimestamp - (10 * 60 * 1000);
+            messages = messages.filter(msg => msg.createdTimestamp >= tenMinutesAgo);
+        }
+
         // Sort messages so that newest is last
-        const sortedMessages = relevantMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+        messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
 
         const messagesIn: { mid: Snowflake, id: number, obj: ModelMessage }[] = [];
 
         //messagesIn.push({ mid: '0', id: 0, obj: { role: 'system', content: systemPrompt } });
-        sortedMessages.forEach(msg => {
+        messages.forEach(msg => {
             const isBot = msg.author.id === this.getBot().client.user?.id;
             const role = isBot ? 'assistant' : 'user';
             const content = msg.content;
@@ -1872,7 +1876,7 @@ export class GuildHolder {
 
                         const toFetch = Math.max(0, 5 - results.length);
                         const closest = toFetch > 0 ? await this.repositoryManager.getClosest(queryEmbeddingVector, toFetch) : [];
-                       
+
                         for (const result of closest) {
                             const entry = await this.repositoryManager.getEntryByPostCode(result.identifier);
                             if (entry) {
