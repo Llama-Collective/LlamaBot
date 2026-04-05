@@ -154,7 +154,6 @@ const ARTIFICIAL_BLOCKS = [
   "crafter"
 ];
 
-const RADIUS = 2;
 const MC_SELECTOR_QUERY = `InhabitedTime = 0 AND !(Palette intersects "${ARTIFICIAL_BLOCKS.join(',')}")`;
 const MC_SELECTOR_JAR = safeJoinPath(process.cwd(), 'java', 'mcaselector-2.6.1.jar');
 
@@ -558,7 +557,7 @@ async function optimizeWorld(worldDir: string): Promise<void> {
 
 async function runMcSelector(worldPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-        const args = ['-jar', MC_SELECTOR_JAR, '--mode', 'delete', '--query', MC_SELECTOR_QUERY, '--radius', RADIUS.toString(), '--world', Path.resolve(worldPath)];
+        const args = ['-jar', MC_SELECTOR_JAR, '--mode', 'delete', '--query', MC_SELECTOR_QUERY, '--world', Path.resolve(worldPath)];
         const proc = spawn('java', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
         let stderr = '';
