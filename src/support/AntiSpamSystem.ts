@@ -292,8 +292,9 @@ export class AntiSpamSystem {
         const urls = Array.from(message.content.matchAll(urlRegex)).map(match => match[0]);
         const hasUrl = urls.length > 0 || message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i);
         const hasAttachment = message.attachments.size > 0;
+        const isForwarded = message.messageSnapshots.size > 0;
 
-        if (!hasAttachment && !hasUrl) {
+        if (!hasAttachment && !hasUrl && !isForwarded) {
             return false;
         }
 
