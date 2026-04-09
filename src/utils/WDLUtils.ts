@@ -15,147 +15,147 @@ const MC_SELECTOR_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_LEVEL_DAT_BYTES = 64 * 1024 * 1024; // 64 MB
 
 const ARTIFICIAL_BLOCKS = [
-  "slime_block",
-  "sponge",
-  "netherite_block",
-  "powered_rail",
-  "note_block",
-  "detector_rail",
-  "piston",
-  "iron_block",
-  "diamond_block",
-  "emerald_block",
-  "beacon",
-  "activator_rail",
-  "redstone_lamp",
-  "redstone_block",
-  "enchanting_table",
-  "anvil",
-  "chipped_anvil",
-  "damaged_anvil",
-  "comparator",
-  "trapped_chest",
-  "daylight_detector",
-  "quartz_block",
-  "quartz_pillar",
-  "chiseled_quartz_block",
-  "iron_trapdoor",
-  "coal_block",
-  "shulker_box",
-  "observer",
-  "white_concrete",
-  "orange_concrete",
-  "magenta_concrete",
-  "light_blue_concrete",
-  "yellow_concrete",
-  "lime_concrete",
-  "pink_concrete",
-  "gray_concrete",
-  "light_gray_concrete",
-  "cyan_concrete",
-  "purple_concrete",
-  "blue_concrete",
-  "brown_concrete",
-  "green_concrete",
-  "red_concrete",
-  "black_concrete",
-  "white_concrete_powder",
-  "orange_concrete_powder",
-  "light_blue_concrete_powder",
-  "yellow_concrete_powder",
-  "lime_concrete_powder",
-  "pink_concrete_powder",
-  "gray_concrete_powder",
-  "light_gray_concrete_powder",
-  "cyan_concrete_powder",
-  "purple_concrete_powder",
-  "blue_concrete_powder",
-  "brown_concrete_powder",
-  "green_concrete_powder",
-  "red_concrete_powder",
-  "black_concrete_powder",
-  "dragon_egg",
-  "honey_block",
-  "white_stained_glass",
-  "orange_stained_glass",
-  "magenta_stained_glass",
-  "light_blue_stained_glass",
-  "yellow_stained_glass",
-  "lime_stained_glass",
-  "pink_stained_glass",
-  "gray_stained_glass",
-  "light_gray_stained_glass",
-  "cyan_stained_glass",
-  "purple_stained_glass",
-  "blue_stained_glass",
-  "brown_stained_glass",
-  "green_stained_glass",
-  "red_stained_glass",
-  "black_stained_glass",
-  "tinted_glass",
-  "orange_stained_glass_pane",
-  "magenta_stained_glass_pane",
-  "light_blue_stained_glass_pane",
-  "lime_stained_glass_pane",
-  "pink_stained_glass_pane",
-  "gray_stained_glass_pane",
-  "light_gray_stained_glass_pane",
-  "cyan_stained_glass_pane",
-  "purple_stained_glass_pane",
-  "blue_stained_glass_pane",
-  "brown_stained_glass_pane",
-  "green_stained_glass_pane",
-  "red_stained_glass_pane",
-  "black_stained_glass_pane",
-  "nether_portal",
-  "conduit",
-  "honeycomb_block",
-  "hopper",
-  "waxed_copper_block",
-  "waxed_cut_copper",
-  "waxed_cut_copper_slab",
-  "waxed_cut_copper_stairs",
-  "waxed_exposed_copper",
-  "waxed_exposed_cut_copper",
-  "waxed_exposed_cut_copper_slab",
-  "waxed_exposed_cut_copper_stairs",
-  "waxed_weathered_copper",
-  "waxed_weathered_cut_copper",
-  "waxed_weathered_cut_copper_slab",
-  "waxed_weathered_cut_copper_stairs",
-  "waxed_oxidized_copper",
-  "waxed_oxidized_cut_copper",
-  "waxed_oxidized_cut_copper_slab",
-  "waxed_oxidized_cut_copper_stairs",
-  "copper_block",
-  "cut_copper",
-  "cut_copper_slab",
-  "cut_copper_stairs",
-  "exposed_copper",
-  "exposed_cut_copper",
-  "exposed_cut_copper_slab",
-  "exposed_cut_copper_stairs",
-  "weathered_copper",
-  "weathered_cut_copper",
-  "weathered_cut_copper_slab",
-  "weathered_cut_copper_stairs",
-  "oxidized_copper",
-  "oxidized_cut_copper",
-  "oxidized_cut_copper_slab",
-  "oxidized_cut_copper_stairs",
-  "target",
-  "repeater",
-  "sticky_piston",
-  "redstone_torch",
-  "redstone_wire",
-  "redstone_wall_torch",
-  "dispenser",
-  "dropper",
-  "crafter"
+    "slime_block",
+    "sponge",
+    "netherite_block",
+    "powered_rail",
+    "note_block",
+    "detector_rail",
+    "piston",
+    "iron_block",
+    "diamond_block",
+    "emerald_block",
+    "beacon",
+    "activator_rail",
+    "redstone_lamp",
+    "redstone_block",
+    "enchanting_table",
+    "anvil",
+    "chipped_anvil",
+    "damaged_anvil",
+    "comparator",
+    "trapped_chest",
+    "daylight_detector",
+    "quartz_block",
+    "quartz_pillar",
+    "chiseled_quartz_block",
+    "iron_trapdoor",
+    "coal_block",
+    "shulker_box",
+    "observer",
+    "white_concrete",
+    "orange_concrete",
+    "magenta_concrete",
+    "light_blue_concrete",
+    "yellow_concrete",
+    "lime_concrete",
+    "pink_concrete",
+    "gray_concrete",
+    "light_gray_concrete",
+    "cyan_concrete",
+    "purple_concrete",
+    "blue_concrete",
+    "brown_concrete",
+    "green_concrete",
+    "red_concrete",
+    "black_concrete",
+    "white_concrete_powder",
+    "orange_concrete_powder",
+    "light_blue_concrete_powder",
+    "yellow_concrete_powder",
+    "lime_concrete_powder",
+    "pink_concrete_powder",
+    "gray_concrete_powder",
+    "light_gray_concrete_powder",
+    "cyan_concrete_powder",
+    "purple_concrete_powder",
+    "blue_concrete_powder",
+    "brown_concrete_powder",
+    "green_concrete_powder",
+    "red_concrete_powder",
+    "black_concrete_powder",
+    "dragon_egg",
+    "honey_block",
+    "white_stained_glass",
+    "orange_stained_glass",
+    "magenta_stained_glass",
+    "light_blue_stained_glass",
+    "yellow_stained_glass",
+    "lime_stained_glass",
+    "pink_stained_glass",
+    "gray_stained_glass",
+    "light_gray_stained_glass",
+    "cyan_stained_glass",
+    "purple_stained_glass",
+    "blue_stained_glass",
+    "brown_stained_glass",
+    "green_stained_glass",
+    "red_stained_glass",
+    "black_stained_glass",
+    "tinted_glass",
+    "orange_stained_glass_pane",
+    "magenta_stained_glass_pane",
+    "light_blue_stained_glass_pane",
+    "lime_stained_glass_pane",
+    "pink_stained_glass_pane",
+    "gray_stained_glass_pane",
+    "light_gray_stained_glass_pane",
+    "cyan_stained_glass_pane",
+    "purple_stained_glass_pane",
+    "blue_stained_glass_pane",
+    "brown_stained_glass_pane",
+    "green_stained_glass_pane",
+    "red_stained_glass_pane",
+    "black_stained_glass_pane",
+    "nether_portal",
+    "conduit",
+    "honeycomb_block",
+    "hopper",
+    "waxed_copper_block",
+    "waxed_cut_copper",
+    "waxed_cut_copper_slab",
+    "waxed_cut_copper_stairs",
+    "waxed_exposed_copper",
+    "waxed_exposed_cut_copper",
+    "waxed_exposed_cut_copper_slab",
+    "waxed_exposed_cut_copper_stairs",
+    "waxed_weathered_copper",
+    "waxed_weathered_cut_copper",
+    "waxed_weathered_cut_copper_slab",
+    "waxed_weathered_cut_copper_stairs",
+    "waxed_oxidized_copper",
+    "waxed_oxidized_cut_copper",
+    "waxed_oxidized_cut_copper_slab",
+    "waxed_oxidized_cut_copper_stairs",
+    "copper_block",
+    "cut_copper",
+    "cut_copper_slab",
+    "cut_copper_stairs",
+    "exposed_copper",
+    "exposed_cut_copper",
+    "exposed_cut_copper_slab",
+    "exposed_cut_copper_stairs",
+    "weathered_copper",
+    "weathered_cut_copper",
+    "weathered_cut_copper_slab",
+    "weathered_cut_copper_stairs",
+    "oxidized_copper",
+    "oxidized_cut_copper",
+    "oxidized_cut_copper_slab",
+    "oxidized_cut_copper_stairs",
+    "target",
+    "repeater",
+    "sticky_piston",
+    "redstone_torch",
+    "redstone_wire",
+    "redstone_wall_torch",
+    "dispenser",
+    "dropper",
+    "crafter"
 ];
 
 const MC_SELECTOR_QUERY = `InhabitedTime = 0 AND !(Palette intersects "${ARTIFICIAL_BLOCKS.join(',')}")`;
-const MC_SELECTOR_JAR = safeJoinPath(process.cwd(), 'java', 'mcaselector-2.6.1.jar');
+const MC_SELECTOR_JAR = safeJoinPath(process.cwd(), 'java', 'mcaselector-2.7.jar');
 
 export type WorldMetadata = {
     path: string; // always relative to root zip; nested zips separated by '/'
@@ -193,9 +193,9 @@ export async function optimizeWorldsInZip(zipPath: string, tempDir: string, outp
     const outputZipPath = outputFile
         ? (Path.isAbsolute(outputFile) ? safeWorkspacePath(outputFile) : safeResolvePath(tempRoot, outputFile))
         : safeJoinPath(
-        tempRoot,
-        `${Path.basename(zipPath, Path.extname(zipPath)) || 'world'}-optimized-${Date.now().toString(36)}.zip`
-    );
+            tempRoot,
+            `${Path.basename(zipPath, Path.extname(zipPath)) || 'world'}-optimized-${Date.now().toString(36)}.zip`
+        );
 
     await fs.mkdir(Path.dirname(outputZipPath), { recursive: true }).catch(() => { });
 
@@ -499,10 +499,21 @@ async function optimizeWorlds(worlds: WorldMetadata[], contexts: ArchiveContext[
 }
 
 async function optimizeWorld(worldDir: string): Promise<void> {
-    await runMcSelector(worldDir);
+    // New wdl formats (26.1+) have a "dimensions" folder instead of separate DIM-1/DIM1 folders
+    const dimensionsPath = safeJoinPath(worldDir, 'dimensions', 'minecraft');
+    const hasDimensionsFolder = await fs.stat(dimensionsPath).then((s) => s.isDirectory()).catch(() => false);
+    if (hasDimensionsFolder) {
+        for (const dim of ['overworld', 'the_nether', 'the_end']) {
+            const dimPath = safeJoinPath(dimensionsPath, dim);
+            const stat = await fs.stat(dimPath).catch(() => null);
+            if (stat && stat.isDirectory()) {
+                await runMcSelector(dimPath);
+            }
+        }
+    }
 
-    // if there is a DIM-1 or DIM1 folder, run runMcSelector on those as well
-    for (const dim of ['DIM-1', 'DIM1']) {
+    // if there is a region, DIM-1, or DIM1 folder, run runMcSelector on those as well (legacy)
+    for (const dim of ['region', 'DIM-1', 'DIM1']) {
         const dimPath = safeJoinPath(worldDir, dim);
         const stat = await fs.stat(dimPath).catch(() => null);
         if (stat && stat.isDirectory()) {
@@ -510,26 +521,12 @@ async function optimizeWorld(worldDir: string): Promise<void> {
         }
     }
 
-    // const pathsToDelete = [
-    //     'stats',
-    //     'scripts',
-    //     'playerdata',
-    //     'advancements',
-    //     'datapacks',
-    //     'data',
-    //     'poi',
-    // ]
-
-    // for (const relPath of pathsToDelete) {
-    //     const targetPath = safeJoinPath(worldDir, relPath);
-    //     await fs.rm(targetPath, { recursive: true, force: true }).catch(() => null);
-    // }
-
     const pathsToKeep = [
         'region',
         'level.dat',
         'DIM-1',
         'DIM1',
+        'dimensions',
         'icon.png',
         'entities'
     ]
@@ -539,18 +536,6 @@ async function optimizeWorld(worldDir: string): Promise<void> {
         if (!pathsToKeep.includes(entry.name)) {
             const targetPath = safeJoinPath(worldDir, entry.name);
             await fs.rm(targetPath, { recursive: true, force: true }).catch(() => null);
-        }
-    }
-
-    // in the DIM-1 and DIM1 folders, only keep region/ and entities/
-    for (const dim of ['DIM-1', 'DIM1']) {
-        const dimPath = safeJoinPath(worldDir, dim);
-        const dimEntries = await fs.readdir(dimPath, { withFileTypes: true }).catch(() => []);
-        for (const entry of dimEntries) {
-            if (entry.name !== 'region' && entry.name !== 'entities') {
-                const targetPath = safeJoinPath(dimPath, entry.name);
-                await fs.rm(targetPath, { recursive: true, force: true }).catch(() => null);
-            }
         }
     }
 }
