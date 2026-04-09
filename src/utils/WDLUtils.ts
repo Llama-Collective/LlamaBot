@@ -512,14 +512,24 @@ async function optimizeWorld(worldDir: string): Promise<void> {
         }
     }
 
-    // if there is a region, DIM-1, or DIM1 folder, run runMcSelector on those as well (legacy)
-    for (const dim of ['region', 'DIM-1', 'DIM1']) {
+    // Legacy handling
+    // If there is a region folder, run it on world root
+    const regionPath = safeJoinPath(worldDir, 'region');
+    const hasRegion = await fs.stat(regionPath).then((s) => s.isDirectory()).catch(() => false);
+    if (hasRegion) {
+        await runMcSelector(worldDir);
+    }
+
+    // if DIM-1, or DIM1 folder, run runMcSelector on those as well (legacy)
+    for (const dim of ['DIM-1', 'DIM1']) {
         const dimPath = safeJoinPath(worldDir, dim);
         const stat = await fs.stat(dimPath).catch(() => null);
         if (stat && stat.isDirectory()) {
             await runMcSelector(dimPath);
         }
     }
+
+
 
     const pathsToKeep = [
         'region',
