@@ -348,10 +348,9 @@ export class AntiSpamSystem {
         const embed = new EmbedBuilder()
             .setColor(0xFFFF00)
             .setTitle(`Spam Check!`)
-            .setDescription(`Hi <@${message.author.id}>, it looks like you sent a message containing ${spamContent}. To prevent spam, attachments and links are not allowed until you verify that you're not a bot. To enable them, please click the "I am not a bot" button below. You have 5 minutes to verify before you are timed out.`)
-            .addFields(
-                { name: 'Note', value: 'You will be timed out automatically if you send attachments or links again without verifying.' },
-            );
+            .setDescription(`Hi <@${message.author.id}>, it looks like you sent a message containing ${spamContent}. To prevent spam, attachments and links are not allowed until you verify that you're not a bot. To enable them, please click the "I am not a bot" button below. **You have 5 minutes to verify before you are timed out.**\n\n⚠️ Caution: If you send another message with attachments or links before verifying, you will be timed out immediately without further warning.`)
+            .setFooter({ text: `You MUST click the button below or you will be timed out!` });
+
         const row = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(new NotABotButton().getBuilder(message.author.id));
         try {
