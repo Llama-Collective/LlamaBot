@@ -354,7 +354,7 @@ export class AntiSpamSystem {
         const row = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(new NotABotButton().getBuilder(message.author.id));
         try {
-            const warningMsg = await message.reply({ embeds: [embed], components: [row as any], flags: [MessageFlags.SuppressNotifications] });
+            const warningMsg = await message.reply({ embeds: [embed], components: [row as any] });
             pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
 
             userData.attachmentsAllowedState = AttachmentsState.WARNED;
