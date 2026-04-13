@@ -24,6 +24,7 @@ import { RuleMatcher } from "../utils/RuleMatcher.js";
 import { tagReferencesInAcknowledgements, tagReferencesInSubmissionRecords } from "../utils/ReferenceUtils.js";
 import { PublishCommitMessage } from "./Publish.js";
 import { safeJoinPath, safeWorkspacePath } from "../utils/SafePath.js";
+import { TemporaryCache } from "../archive/TemporaryCache.js";
 
 export class Submission {
     private guildHolder: GuildHolder;
@@ -34,7 +35,7 @@ export class Submission {
     private extractionResults?: LLMResponseFuture;
     private llmReviseResponse?: LLMResponseFuture;
     public lastAccessed: number = Date.now();
-    private cachedAttachments?: BaseAttachment[];
+    private cachedAttachments: TemporaryCache<BaseAttachment[]>;
     public imagesProcessing: boolean = false;
     public attachmentsProcessing: boolean = false;
     public tagging: boolean = false;
@@ -52,6 +53,14 @@ export class Submission {
         this.folderPath = safeWorkspacePath(folderPath);
         this.config = new ConfigManager(safeJoinPath(this.folderPath, 'submission.json'));
         this.revisions = new RevisionManager(this, safeJoinPath(this.folderPath, 'revisions'));
+
+        this.cachedAttachments = new TemporaryCache<BaseAttachment[]>(5 * 60 * 1000, async () => {
+            const channel = await this.getSubmissionChannel();
+            if (!channel) {
+                throw new Error('Submission channel not found');
+            }
+            return await getAllAttachments(channel, this.guildHolder.getBot().client.user?.id || '');
+        });
     }
 
     /**
@@ -844,22 +853,7 @@ export class Submission {
     }
 
     async getAttachments(): Promise<BaseAttachment[]> {
-        if (this.cachedAttachments) {
-            return this.cachedAttachments
-        }
-        const channel = await this.getSubmissionChannel();
-        if (!channel) {
-            throw new Error('Submission channel not found');
-        }
-
-        const attachments = await getAllAttachments(channel, this.guildHolder.getBot().client.user?.id || '');
-        this.cachedAttachments = attachments
-
-        setTimeout(() => {
-            this.cachedAttachments = undefined;
-        }, 5000)
-
-        return attachments
+        return this.cachedAttachments.get();
     }
 
     async getAttachmentById(attachmentId: string): Promise<Attachment | null> {
