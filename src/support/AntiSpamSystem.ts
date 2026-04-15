@@ -300,7 +300,7 @@ export class AntiSpamSystem {
         this.clearPendingSpamUser(interaction.user.id);
 
         await interaction.reply({
-            content: `Thank you for confirming you're not a bot! You can now send messages with attachments or links.`,
+            content: `Thank you for confirming you're not a bot! You can now send messages!`,
             flags: MessageFlags.Ephemeral,
         });
 
