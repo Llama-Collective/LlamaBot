@@ -332,25 +332,14 @@ export class AntiSpamSystem {
             ? 'Multi-channel message spam'
             : 'Link/attachment spam - repeat offender';
 
+
+        let failedTimeout = false;
         try {
             const duration = 28 * 24 * 60 * 60 * 1000;
             await member.timeout(duration, timeoutReason);
         } catch (e: any) {
             console.error(e);
-            const failDescription = trigger === 'multichannel'
-                ? `Tried to timeout <@${userData.id}> for multi-channel message spam, but I do not have permission to timeout them.`
-                : `Tried to timeout <@${userData.id}> for link/attachment spam, but I do not have permission to timeout them.`;
-            const embed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle(`Failed to Timeout!`)
-                .setDescription(failDescription);
-
-            const modChannel = await guild.channels.fetch(this.guildHolder.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)).catch(() => null);
-            if (modChannel && modChannel.isSendable()) {
-                await modChannel.send({ embeds: [embed], components: [actionRow as any], flags: [MessageFlags.SuppressNotifications] });
-            }
-            this.clearPendingSpamUser(userData.id);
-            return;
+            failedTimeout = true;
         }
 
         let offendingMessage: {
@@ -398,6 +387,22 @@ export class AntiSpamSystem {
             throw error;
         }
         this.clearPendingSpamUser(userData.id);
+
+        if (failedTimeout) {
+            const failDescription = trigger === 'multichannel'
+                ? `Tried to timeout <@${userData.id}> for multi-channel message spam, but I do not have permission to timeout them.`
+                : `Tried to timeout <@${userData.id}> for link/attachment spam, but I do not have permission to timeout them.`;
+            const embed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle(`Failed to Timeout!`)
+                .setDescription(failDescription);
+
+            const modChannel = await guild.channels.fetch(this.guildHolder.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)).catch(() => null);
+            if (modChannel && modChannel.isSendable()) {
+                await modChannel.send({ embeds: [embed], components: [actionRow as any], flags: [MessageFlags.SuppressNotifications] });
+            }
+            return;
+        }
 
         const reasonText = autoTimeout
             ? 'not verifying within the allotted time'
