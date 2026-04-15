@@ -241,6 +241,8 @@ export class SetImagesMenu implements Menu {
     }
 
     public static async sendImagesMenuAndButton(submission: Submission, interaction: Interaction, useUpdate: boolean = false) {
+        submission.clearAttachmentsCache();
+        
         const menu = await new SetImagesMenu().getBuilderOrNull(submission);
         const images = submission.getConfigManager().getConfig(SubmissionConfigs.IMAGES);
         if (menu) {

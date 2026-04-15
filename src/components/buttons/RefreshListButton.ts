@@ -29,6 +29,8 @@ export class RefreshListButton implements Button {
             return;
         }
 
+        submission.clearAttachmentsCache();
+
 
         if (isImages == "y") {
             await SetImagesMenu.sendImagesMenuAndButton(submission, interaction, true);

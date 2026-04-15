@@ -240,6 +240,8 @@ export class SetAttachmentsMenu implements Menu {
     }
 
     public static async sendAttachmentsMenuAndButton(submission: Submission, interaction: Interaction, useUpdate: boolean = false) {
+        submission.clearAttachmentsCache();
+
         const menu = await new SetAttachmentsMenu().getBuilderOrNull(submission);
         const attachments = submission.getConfigManager().getConfig(SubmissionConfigs.ATTACHMENTS);
         if (menu) {

@@ -1057,4 +1057,8 @@ export class Submission {
     public getGuildHolder(): GuildHolder {
         return this.guildHolder;
     }
+
+    public clearAttachmentsCache() {
+        this.cachedAttachments.clear();
+    }
 }
