@@ -27,6 +27,7 @@ type PendingSpamUser = {
     channelId: Snowflake;
     followUpSent: boolean;
     messageRefs: Set<string>;
+    followUpMessageId?: Snowflake;
 };
 
 export class AntiSpamSystem {
@@ -239,8 +240,9 @@ export class AntiSpamSystem {
                     // Only add follow-up message to pending refs if the original warning message is still present
                     // Check if pending user still exists before accessing messageRefs in case they were cleared in the meantime
                     const currentPendingUser = this.pendingSpamUsers.get(userId);
-                    if (currentPendingUser) {
+                    if (currentPendingUser && currentPendingUser.state === 'warned') {
                         currentPendingUser.messageRefs.add(this.getMessageRef(followUpMessage));
+                        currentPendingUser.followUpMessageId = followUpMessage.id;
                     } else {
                         await this.deleteMessageWithRetry(followUpMessage, 'spam check follow-up cleanup');
                     }
@@ -304,6 +306,17 @@ export class AntiSpamSystem {
 
         if (interaction.user.id === userID) {
             await this.deleteMessageWithRetry(interaction.message as Message, 'verification prompt cleanup');
+        }
+
+        if (pendingUser && pendingUser.followUpMessageId) {
+            const guild = this.guildHolder.getGuild();
+            const channel = await guild.channels.fetch(pendingUser.channelId).catch(() => null);
+            if (channel?.isTextBased()) {
+                const followUpMsg = await channel.messages.fetch(pendingUser.followUpMessageId).catch(() => null);
+                if (followUpMsg) {
+                    await this.deleteMessageWithRetry(followUpMsg, 'verification follow-up cleanup');
+                }
+            }
         }
     }
 
