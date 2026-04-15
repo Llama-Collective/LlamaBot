@@ -227,7 +227,7 @@ export class AntiSpamSystem {
                 if (userData?.attachmentsAllowedState === AttachmentsState.WARNED) {
                     await this.timeoutUserForSpam(userData, true);
                 }
-            } else if (!pendingUser.followUpSent && elapsed >= 180_000) {
+            } else if (!pendingUser.followUpSent && elapsed >= 150_000) {
                 pendingUser.followUpSent = true;
                 const guild = this.guildHolder.getGuild();
                 const channel = await guild.channels.fetch(pendingUser.channelId).catch(() => null);
