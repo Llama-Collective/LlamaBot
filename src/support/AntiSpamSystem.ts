@@ -7,14 +7,29 @@ import { LiftTimeoutButton } from "../components/buttons/LiftTimeoutButton.js";
 import { AttachmentsState, UserData } from "./UserData.js";
 import { replyEphemeral, truncateStringWithEllipsis } from "../utils/Util.js";
 
+
+type MessageRef = {
+    channelId: Snowflake;
+    messageId: Snowflake;
+    timestamp: number;
+}
+
+type TransientMessagesForUser = {
+    messageRefs: MessageRef[];
+    allowedUntil: number; // cached expiry from userData; 0 = unknown/not allowed
+}
+
 type PendingSpamUser = {
+    trigger: 'attachment' | 'multichannel';
     state: 'warned' | 'verifying' | 'timing_out';
+    warnedAt: number;
     messageRefs: Set<string>;
-    timeoutHandle?: ReturnType<typeof setTimeout>;
 };
 
 export class AntiSpamSystem {
     private pendingSpamUsers = new Map<Snowflake, PendingSpamUser>();
+    private transientMessageTracker = new Map<Snowflake, TransientMessagesForUser>();
+    private lastTickTime = 0;
 
     constructor(private guildHolder: GuildHolder) {}
 
@@ -22,11 +37,13 @@ export class AntiSpamSystem {
         return [message.channel.id, message.id].join('-');
     }
 
-    private getOrCreatePendingSpamUser(userId: Snowflake): PendingSpamUser {
+    private getOrCreatePendingSpamUser(userId: Snowflake, trigger: 'attachment' | 'multichannel' = 'attachment'): PendingSpamUser {
         let pendingUser = this.pendingSpamUsers.get(userId);
         if (!pendingUser) {
             pendingUser = {
+                trigger,
                 state: 'warned',
+                warnedAt: Date.now(),
                 messageRefs: new Set<string>(),
             };
             this.pendingSpamUsers.set(userId, pendingUser);
@@ -38,10 +55,6 @@ export class AntiSpamSystem {
         const pendingUser = this.pendingSpamUsers.get(userId);
         if (!pendingUser) {
             return;
-        }
-
-        if (pendingUser.timeoutHandle) {
-            clearTimeout(pendingUser.timeoutHandle);
         }
 
         this.pendingSpamUsers.delete(userId);
@@ -112,6 +125,101 @@ export class AntiSpamSystem {
         return deletedCount;
     }
 
+    /**
+     * Returns true if the user has sent messages in 2+ distinct channels within 30 seconds,
+     * or 3+ distinct channels within 5 minutes.
+     */
+    private checkMultiChannelSpam(userId: Snowflake, now: number): boolean {
+        const transient = this.transientMessageTracker.get(userId);
+        if (!transient || transient.messageRefs.length < 2) return false;
+
+        const thirtySecondsAgo = now - 30_000;
+        const fiveMinutesAgo = now - 300_000;
+
+        let recentChannels: Set<string> | null = null;
+        let allChannels: Set<string> | null = null;
+
+        for (const ref of transient.messageRefs) {
+            if (ref.timestamp >= thirtySecondsAgo) {
+                if (!recentChannels) recentChannels = new Set();
+                recentChannels.add(ref.channelId);
+                if (recentChannels.size >= 2) return true;
+            }
+            if (ref.timestamp >= fiveMinutesAgo) {
+                if (!allChannels) allChannels = new Set();
+                allChannels.add(ref.channelId);
+                if (allChannels.size >= 3) return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async warnUserForSpam(message: Message, trigger: 'attachment' | 'multichannel', description: string): Promise<void> {
+        const pendingUser = this.getOrCreatePendingSpamUser(message.author.id, trigger);
+
+        if (trigger === 'multichannel') {
+            // Seed pending refs from all transient messages so they get deleted on timeout
+            const transient = this.transientMessageTracker.get(message.author.id);
+            if (transient) {
+                for (const ref of transient.messageRefs) {
+                    pendingUser.messageRefs.add(`${ref.channelId}-${ref.messageId}`);
+                }
+            }
+        } else {
+            pendingUser.messageRefs.add(this.getMessageRef(message));
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0xFFFF00)
+            .setTitle(`Spam Check!`)
+            .setDescription(description)
+            .setFooter({ text: `You MUST click the button below or you will be timed out!` });
+
+        const row = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(new NotABotButton().getBuilder(message.author.id));
+
+        try {
+            const warningMsg = await message.reply({ embeds: [embed], components: [row as any] });
+            pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
+
+            const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
+            userData.attachmentsAllowedState = AttachmentsState.WARNED;
+            this.mergePendingMessageRefs(userData);
+            await this.guildHolder.getUserManager().saveUserData(userData);
+        } catch (error) {
+            this.clearPendingSpamUser(message.author.id);
+            throw error;
+        }
+    }
+
+    /**
+     * Prunes transient message store and expires pending spam warnings.
+     * Called periodically from GuildHolder.loop().
+     */
+    public async tick(): Promise<void> {
+        const now = Date.now();
+        if (now - this.lastTickTime < 60_000) return;
+        this.lastTickTime = now;
+
+        const cutoff = now - 300_000;
+        for (const [userId, transient] of this.transientMessageTracker) {
+            transient.messageRefs = transient.messageRefs.filter(ref => ref.timestamp >= cutoff);
+            if (transient.messageRefs.length === 0) {
+                this.transientMessageTracker.delete(userId);
+            }
+        }
+
+        for (const [userId, pendingUser] of this.pendingSpamUsers) {
+            if (pendingUser.state !== 'warned' || now - pendingUser.warnedAt < 300_000) continue;
+
+            const userData = await this.guildHolder.getUserManager().getUserData(userId);
+            if (userData?.attachmentsAllowedState === AttachmentsState.WARNED) {
+                await this.timeoutUserForSpam(userData, true);
+            }
+        }
+    }
+
     public async handleMessage(message: Message): Promise<boolean> {
         if (await this.handleSpamCheck(message)) {
             return true;
@@ -171,14 +279,13 @@ export class AntiSpamSystem {
     }
 
     public async timeoutUserForSpam(userData: UserData, autoTimeout: boolean = false) {
+        const existingPending = this.pendingSpamUsers.get(userData.id);
+        const trigger = existingPending?.trigger ?? 'attachment';
+
         this.mergePendingMessageRefs(userData);
 
         const pendingUser = this.getOrCreatePendingSpamUser(userData.id);
         pendingUser.state = 'timing_out';
-        if (pendingUser.timeoutHandle) {
-            clearTimeout(pendingUser.timeoutHandle);
-            pendingUser.timeoutHandle = undefined;
-        }
 
         const guild = this.guildHolder.getGuild();
         const member = await guild.members.fetch(userData.id).catch(() => null);
@@ -193,15 +300,22 @@ export class AntiSpamSystem {
             return;
         }
 
+        const timeoutReason = trigger === 'multichannel'
+            ? 'Multi-channel message spam'
+            : 'Link/attachment spam - repeat offender';
+
         try {
             const duration = 28 * 24 * 60 * 60 * 1000;
-            await member.timeout(duration, 'Link/attachment spam - repeat offender');
+            await member.timeout(duration, timeoutReason);
         } catch (e: any) {
             console.error(e);
+            const failDescription = trigger === 'multichannel'
+                ? `Tried to timeout <@${userData.id}> for multi-channel message spam, but I do not have permission to timeout them.`
+                : `Tried to timeout <@${userData.id}> for link/attachment spam, but I do not have permission to timeout them.`;
             const embed = new EmbedBuilder()
                 .setColor(0xFF0000)
                 .setTitle(`Failed to Timeout!`)
-                .setDescription(`Tried to timeout <@${userData.id}> for link/attachment spam, but I do not have permission to timeout them.`);
+                .setDescription(failDescription);
 
             const modChannel = await guild.channels.fetch(this.guildHolder.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)).catch(() => null);
             if (modChannel && modChannel.isSendable()) {
@@ -257,7 +371,12 @@ export class AntiSpamSystem {
         }
         this.clearPendingSpamUser(userData.id);
 
-        const text = [`Timed out <@${userData.id}> for ${autoTimeout ? `not verifying within the allotted time` : `sending links/attachments again after warning`}.`];
+        const reasonText = autoTimeout
+            ? 'not verifying within the allotted time'
+            : trigger === 'multichannel'
+                ? 'sending messages across multiple channels after warning'
+                : 'sending links/attachments again after warning';
+        const text = [`Timed out <@${userData.id}> for ${reasonText}.`];
         if (offendingMessage) {
             text.push(`**Offending Message:**\n${truncateStringWithEllipsis(offendingMessage.content, 2000)}`);
             if (offendingMessage.files.length > 0) {
@@ -268,9 +387,12 @@ export class AntiSpamSystem {
             }
         }
 
+        const embedTitle = trigger === 'multichannel'
+            ? 'User Timed Out for Multi-Channel Spam!'
+            : 'User Timed Out for Spam!';
         const embed = new EmbedBuilder()
             .setColor(0xFF0000)
-            .setTitle(`User Timed Out for Spam!`)
+            .setTitle(embedTitle)
             .setDescription(text.join('\n'));
 
         const modChannel = await guild.channels.fetch(this.guildHolder.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID)).catch(() => null);
@@ -288,6 +410,51 @@ export class AntiSpamSystem {
             return false;
         }
 
+        // Capture pending state before tracking — tracking may create a new multichannel entry,
+        // and the triggering message must not be intercepted by the block below.
+        const pendingSpamUser = this.pendingSpamUsers.get(message.author.id);
+
+        // Track message in transient store and check multichannel spam thresholds.
+        if (!pendingSpamUser) {
+            const userId = message.author.id;
+            const now = Date.now();
+            let transient = this.transientMessageTracker.get(userId);
+            if (!transient) {
+                transient = { messageRefs: [], allowedUntil: 0 };
+                this.transientMessageTracker.set(userId, transient);
+            }
+            transient.messageRefs.push({ channelId: message.channel.id, messageId: message.id, timestamp: now });
+
+            if (transient.allowedUntil <= now && this.checkMultiChannelSpam(userId, now)) {
+                const existingUserData = await this.guildHolder.getUserManager().getUserData(userId);
+                if (existingUserData?.attachmentsAllowedState === AttachmentsState.ALLOWED && (existingUserData.attachmentsAllowedExpiry ?? 0) > now) {
+                    transient.allowedUntil = existingUserData.attachmentsAllowedExpiry!;
+                } else {
+                    await this.warnUserForSpam(message, 'multichannel', `Hi <@${message.author.id}>, you've been detected sending messages across multiple channels rapidly, which is suspicious behavior. To prevent spam, you must verify that you're not a bot by clicking the "I am not a bot" button below. **You have 5 minutes to verify before you are timed out.**\n\n⚠️ Caution: If you send any message before verifying, you will be timed out immediately without further warning.`);
+                    return false;
+                }
+            }
+        }
+
+        // Multichannel pending users: intercept ALL messages, not just attachment/link ones
+        else if (pendingSpamUser.trigger === 'multichannel') {
+            pendingSpamUser.messageRefs.add(this.getMessageRef(message));
+
+            if (pendingSpamUser.state === 'verifying') {
+                return false;
+            }
+
+            await this.deleteMessageWithRetry(message, 'multichannel spam cleanup');
+
+            if (pendingSpamUser.state === 'timing_out') {
+                return true;
+            }
+
+            const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
+            await this.timeoutUserForSpam(userData);
+            return true;
+        }
+
         const urlRegex = /(?:https?:\/\/|www\.)[^\s<]+/gi;
         const urls = Array.from(message.content.matchAll(urlRegex)).map(match => match[0]);
         const hasUrl = urls.length > 0 || message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i);
@@ -298,7 +465,6 @@ export class AntiSpamSystem {
             return false;
         }
 
-        const pendingSpamUser = this.pendingSpamUsers.get(message.author.id);
         if (pendingSpamUser) {
             pendingSpamUser.messageRefs.add(this.getMessageRef(message));
 
@@ -326,6 +492,8 @@ export class AntiSpamSystem {
             }
 
             if (userData.attachmentsAllowedExpiry > now) {
+                const transient = this.transientMessageTracker.get(message.author.id);
+                if (transient) transient.allowedUntil = userData.attachmentsAllowedExpiry;
                 return false;
             }
 
@@ -341,43 +509,7 @@ export class AntiSpamSystem {
         }
 
         const spamContent = hasAttachment && hasUrl ? 'attachments and links' : hasAttachment ? 'attachments' : 'links';
-        const pendingUser = this.getOrCreatePendingSpamUser(message.author.id);
-        pendingUser.state = 'warned';
-        pendingUser.messageRefs.add(this.getMessageRef(message));
-
-        const embed = new EmbedBuilder()
-            .setColor(0xFFFF00)
-            .setTitle(`Spam Check!`)
-            .setDescription(`Hi <@${message.author.id}>, it looks like you sent a message containing ${spamContent}. To prevent spam, attachments and links are not allowed until you verify that you're not a bot. To enable them, please click the "I am not a bot" button below. **You have 5 minutes to verify before you are timed out.**\n\n⚠️ Caution: If you send another message with attachments or links before verifying, you will be timed out immediately without further warning.`)
-            .setFooter({ text: `You MUST click the button below or you will be timed out!` });
-
-        const row = new ActionRowBuilder<ButtonBuilder>()
-            .addComponents(new NotABotButton().getBuilder(message.author.id));
-        try {
-            const warningMsg = await message.reply({ embeds: [embed], components: [row as any] });
-            pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
-
-            userData.attachmentsAllowedState = AttachmentsState.WARNED;
-            this.mergePendingMessageRefs(userData);
-
-            await this.guildHolder.getUserManager().saveUserData(userData);
-        } catch (error) {
-            this.clearPendingSpamUser(message.author.id);
-            throw error;
-        }
-
-        pendingUser.timeoutHandle = setTimeout(async () => {
-            const currentPendingUser = this.pendingSpamUsers.get(userData.id);
-            if (currentPendingUser !== pendingUser || currentPendingUser.state !== 'warned') {
-                return;
-            }
-
-            const updatedUserData = await this.guildHolder.getUserManager().getUserData(userData.id);
-            if (updatedUserData && updatedUserData.attachmentsAllowedState === AttachmentsState.WARNED) {
-                await this.timeoutUserForSpam(updatedUserData, true);
-            }
-        }, 5 * 60 * 1000);
-
+        await this.warnUserForSpam(message, 'attachment', `Hi <@${message.author.id}>, it looks like you sent a message containing ${spamContent}. To prevent spam, attachments and links are not allowed until you verify that you're not a bot. To enable them, please click the "I am not a bot" button below. **You have 5 minutes to verify before you are timed out.**\n\n⚠️ Caution: If you send another message with attachments or links before verifying, you will be timed out immediately without further warning.`);
         return false;
     }
 

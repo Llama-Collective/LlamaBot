@@ -976,6 +976,7 @@ export class GuildHolder {
         await this.submissions.purgeOldSubmissions();
         await this.submissions.saveSubmissions();
         await this.repositoryManager.save();
+        await this.antiSpamSystem.tick();
 
         // const now = Date.now();
         // if (now - this.lastDayLoop >= 24 * 60 * 60 * 1000) { // Every 24 hours
