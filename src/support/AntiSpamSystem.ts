@@ -23,6 +23,8 @@ type PendingSpamUser = {
     trigger: 'attachment' | 'multichannel';
     state: 'warned' | 'verifying' | 'timing_out';
     warnedAt: number;
+    channelId: Snowflake;
+    followUpSent: boolean;
     messageRefs: Set<string>;
 };
 
@@ -37,13 +39,15 @@ export class AntiSpamSystem {
         return [message.channel.id, message.id].join('-');
     }
 
-    private getOrCreatePendingSpamUser(userId: Snowflake, trigger: 'attachment' | 'multichannel' = 'attachment'): PendingSpamUser {
+    private getOrCreatePendingSpamUser(userId: Snowflake, trigger: 'attachment' | 'multichannel' = 'attachment', channelId: Snowflake = ''): PendingSpamUser {
         let pendingUser = this.pendingSpamUsers.get(userId);
         if (!pendingUser) {
             pendingUser = {
                 trigger,
                 state: 'warned',
                 warnedAt: Date.now(),
+                channelId,
+                followUpSent: false,
                 messageRefs: new Set<string>(),
             };
             this.pendingSpamUsers.set(userId, pendingUser);
@@ -156,7 +160,7 @@ export class AntiSpamSystem {
     }
 
     private async warnUserForSpam(message: Message, trigger: 'attachment' | 'multichannel', description: string): Promise<void> {
-        const pendingUser = this.getOrCreatePendingSpamUser(message.author.id, trigger);
+        const pendingUser = this.getOrCreatePendingSpamUser(message.author.id, trigger, message.channel.id);
 
         if (trigger === 'multichannel') {
             // Seed pending refs from all transient messages so they get deleted on timeout
@@ -199,7 +203,7 @@ export class AntiSpamSystem {
      */
     public async tick(): Promise<void> {
         const now = Date.now();
-        if (now - this.lastTickTime < 60_000) return;
+        if (now - this.lastTickTime < 30_000) return;
         this.lastTickTime = now;
 
         const cutoff = now - 300_000;
@@ -211,11 +215,35 @@ export class AntiSpamSystem {
         }
 
         for (const [userId, pendingUser] of this.pendingSpamUsers) {
-            if (pendingUser.state !== 'warned' || now - pendingUser.warnedAt < 300_000) continue;
+            if (pendingUser.state !== 'warned') continue;
 
-            const userData = await this.guildHolder.getUserManager().getUserData(userId);
-            if (userData?.attachmentsAllowedState === AttachmentsState.WARNED) {
-                await this.timeoutUserForSpam(userData, true);
+            const elapsed = now - pendingUser.warnedAt;
+
+            if (elapsed >= 300_000) {
+                const userData = await this.guildHolder.getUserManager().getUserData(userId);
+                if (userData?.attachmentsAllowedState === AttachmentsState.WARNED) {
+                    await this.timeoutUserForSpam(userData, true);
+                }
+            } else if (!pendingUser.followUpSent && elapsed >= 180_000) {
+                pendingUser.followUpSent = true;
+                const guild = this.guildHolder.getGuild();
+                const channel = await guild.channels.fetch(pendingUser.channelId).catch(() => null);
+                if (channel?.isSendable()) {
+                    const embed = new EmbedBuilder()
+                        .setColor(0xFF8800)
+                        .setTitle(`Spam Check Reminder!`)
+                        .setDescription(`⚠️ <@${userId}>, you still have not verified that you're not a bot. **You have 2 minutes remaining before you are timed out.** Click the button in the message above to verify now.`);
+                    const followUpMessage = await channel.send({ embeds: [embed] });
+
+                    // Only add follow-up message to pending refs if the original warning message is still present
+                    // Check if pending user still exists before accessing messageRefs in case they were cleared in the meantime
+                    const currentPendingUser = this.pendingSpamUsers.get(userId);
+                    if (currentPendingUser) {
+                        currentPendingUser.messageRefs.add(this.getMessageRef(followUpMessage));
+                    } else {
+                        await this.deleteMessageWithRetry(followUpMessage, 'spam check follow-up cleanup');
+                    }
+                }
             }
         }
     }
