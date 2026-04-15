@@ -22,6 +22,7 @@ type TransientMessagesForUser = {
 type PendingSpamUser = {
     trigger: 'attachment' | 'multichannel';
     state: 'warned' | 'verifying' | 'timing_out';
+    warningURL: string;
     warnedAt: number;
     channelId: Snowflake;
     followUpSent: boolean;
@@ -49,6 +50,7 @@ export class AntiSpamSystem {
                 channelId,
                 followUpSent: false,
                 messageRefs: new Set<string>(),
+                warningURL: '',
             };
             this.pendingSpamUsers.set(userId, pendingUser);
         }
@@ -186,6 +188,7 @@ export class AntiSpamSystem {
         try {
             const warningMsg = await message.reply({ embeds: [embed], components: [row as any] });
             pendingUser.messageRefs.add(this.getMessageRef(warningMsg));
+            pendingUser.warningURL = warningMsg.url;
 
             const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
             userData.attachmentsAllowedState = AttachmentsState.WARNED;
@@ -229,11 +232,9 @@ export class AntiSpamSystem {
                 const guild = this.guildHolder.getGuild();
                 const channel = await guild.channels.fetch(pendingUser.channelId).catch(() => null);
                 if (channel?.isSendable()) {
-                    const embed = new EmbedBuilder()
-                        .setColor(0xFF8800)
-                        .setTitle(`Spam Check Reminder!`)
-                        .setDescription(`⚠️ <@${userId}>, you still have not verified that you're not a bot. **You have 2 minutes remaining before you are timed out.** Click the button in the message above to verify now.`);
-                    const followUpMessage = await channel.send({ embeds: [embed] });
+                    const followUpMessage = await channel.send({ 
+                        content: `⚠️ <@${userId}>, you still have not verified that you're not a bot. **You have 2 minutes remaining before you are timed out.** Click the button in the ${pendingUser.warningURL ? `[original warning message](${pendingUser.warningURL})` : 'previous message'} to verify now!`,
+                    });
 
                     // Only add follow-up message to pending refs if the original warning message is still present
                     // Check if pending user still exists before accessing messageRefs in case they were cleared in the meantime
