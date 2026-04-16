@@ -244,25 +244,25 @@ export class GuildHolder {
 
         // Handle submissions
         else if (message.channel.isThread() && message.channel.parentId === this.getSubmissionsChannelId()) {
-            if (await this.handleSubmissionMessage(message).catch(e => {
+            await this.handleSubmissionMessage(message).catch(e => {
                 console.error('Error handling submission message:', e);
                 return true;
-            })) {
+            });
 
-                // make sure message isn't first message
-                if (message.id === message.channel.id) {
-                    return;
-                }
-
-                await this.handleMessageReferences(message).catch(e => {
-                    console.error('Error handling post references:', e);
-                });
-
-                await this.handleThanks(message).catch(e => {
-                    console.error('Error handling thanks message:', e);
-                });
+            // make sure message isn't first message
+            if (message.id === message.channel.id) {
                 return;
             }
+
+            await this.handleMessageReferences(message).catch(e => {
+                console.error('Error handling post references:', e);
+            });
+
+            await this.handleThanks(message).catch(e => {
+                console.error('Error handling thanks message:', e);
+            });
+            
+            return;
         } else if (message.channel.isThread()) {
             const dictionaryChannelId = this.getConfigManager().getConfig(GuildConfigs.DICTIONARY_CHANNEL_ID);
             if (dictionaryChannelId && message.channel.parentId === dictionaryChannelId) {
