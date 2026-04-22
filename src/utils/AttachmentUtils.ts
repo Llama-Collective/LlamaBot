@@ -781,7 +781,7 @@ export function getAttachmentsFromMessage(message: Message, attachments: BaseAtt
                 timestamp: message.createdTimestamp,
                 author: author,
                 source: AttachmentSource.MessageAttachment,
-                description: description,
+                description: attachment.description || description || '',
                 size: attachment.size,
                 canDownload: true, // Discord attachments can be downloaded directly
             });
@@ -809,7 +809,7 @@ export function getAttachmentsFromMessage(message: Message, attachments: BaseAtt
                         timestamp: message.createdTimestamp,
                         author: author,
                         source: AttachmentSource.MessageAttachment,
-                        description: '',
+                        description: attachment.description || '',
                         size: attachment.size,
                         canDownload: true, // Discord attachments can be downloaded directly
                     });
