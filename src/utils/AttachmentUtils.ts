@@ -771,8 +771,6 @@ export function getAttachmentsFromMessage(message: Message, attachments: BaseAtt
             const index = attachments.findIndex(attachment2 => attachment2.id === attachment.id);
 
             if (index !== -1) {
-                // remove duplicate
-                attachments.splice(index, 1);
                 return;
             }
             attachments.push({
@@ -787,6 +785,36 @@ export function getAttachmentsFromMessage(message: Message, attachments: BaseAtt
                 size: attachment.size,
                 canDownload: true, // Discord attachments can be downloaded directly
             });
+        })
+    }
+
+    if (message.messageSnapshots.size > 0) {
+        message.messageSnapshots.forEach(snapshot => {
+            if (snapshot.content.length > 0) {
+                // Get attachments from the message snapshot text
+                getAttachmentsFromText(snapshot.content, attachments, message.createdTimestamp, author);
+            }
+            if (snapshot.attachments.size > 0) {
+                snapshot.attachments.forEach(attachment => {
+                    const index = attachments.findIndex(attachment2 => attachment2.id === attachment.id);
+
+                    if (index !== -1) {
+                        return;
+                    }
+                    attachments.push({
+                        id: attachment.id,
+                        name: attachment.name,
+                        contentType: attachment.contentType || 'unknown',
+                        url: attachment.url,
+                        timestamp: message.createdTimestamp,
+                        author: author,
+                        source: AttachmentSource.MessageAttachment,
+                        description: '',
+                        size: attachment.size,
+                        canDownload: true, // Discord attachments can be downloaded directly
+                    });
+                })
+            }
         })
     }
     return attachments;
