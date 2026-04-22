@@ -254,7 +254,7 @@ export class SetImagesMenu implements Menu {
                 secondRow.addComponents(new EditInfoMultipleButton().getBuilder(true));
             }
             rows.push(secondRow);
-            await replyReplace(useUpdate, interaction, `Please choose images for the submission`, rows as any)
+            await replyReplace(useUpdate, interaction, `Please choose images for the submission. If you don't see the images you want, try uploading them to this channel and then press the refresh button below.`, rows as any)
         } else {
             const row = new ActionRowBuilder().addComponents(new RefreshListButton().getBuilder(true), new AddImageButton().getBuilder());
             if (images === null) {
@@ -262,7 +262,7 @@ export class SetImagesMenu implements Menu {
             } else if (images.length > 0) {
                 row.addComponents(new EditInfoMultipleButton().getBuilder(true));
             }
-            await replyReplace(useUpdate, interaction, `No images found! Try uploading images first and then press the button below.`, [
+            await replyReplace(useUpdate, interaction, `No images found! Upload images to this channel first and then press the refresh button below.`, [
                 row as any
             ])
         }

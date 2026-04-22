@@ -254,7 +254,7 @@ export class SetAttachmentsMenu implements Menu {
             }
 
             rows.push(secondRow);
-            await replyReplace(useUpdate, interaction, `Please choose other attachments (eg: Schematics/WDLs) for the submission`, rows);
+            await replyReplace(useUpdate, interaction, `Please choose other attachments (eg: Schematics/WDLs) for the submission. If you don't see the attachments you want, try uploading them to this channel and then press the refresh button below.`, rows);
         } else {
             const row = new ActionRowBuilder().addComponents(new RefreshListButton().getBuilder(false), new AddAttachmentButton().getBuilder());
             if (attachments === null) {
@@ -263,7 +263,7 @@ export class SetAttachmentsMenu implements Menu {
                 row.addComponents(new EditInfoMultipleButton().getBuilder(false));
             }
 
-            await replyReplace(useUpdate, interaction, `No attachments found! Try uploading attachments first and then press the button below.`, [
+            await replyReplace(useUpdate, interaction, `No attachments found! Upload attachments to this channel first and then press the refresh button below.`, [
                 row as any
             ])
         }
