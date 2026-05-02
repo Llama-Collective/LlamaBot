@@ -80,6 +80,16 @@ export const GuildConfigs = {
     MOD_LOG_CHANNEL_ID: new Config<Snowflake>("modLogChannelId", ""),
 
     /**
+     * Alt account detection creation threshold in milliseconds (default: 7 days)
+     */
+    ALT_ACCOUNT_DETECTION_CREATION_THRESHOLD: new Config<number>("altAccountDetectionCreationThreshold", 7 * 24 * 60 * 60 * 1000),
+
+    /**
+     * Alt account detection enabled
+     */
+    ALT_ACCOUNT_DETECTION_ENABLED: new Config<boolean>("altAccountDetectionEnabled", false),
+
+    /**
      * Conversational LLM enabled
      */
     CONVERSATIONAL_LLM_ENABLED: new Config<boolean>("conversationalLlmEnabled", false),

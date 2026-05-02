@@ -328,13 +328,13 @@ export class Bot {
             }
 
             if (!interaction.inGuild()) {
-                replyEphemeral(interaction, 'Cannot use outside of guild!')
+                replyEphemeral(interaction, 'Cannot use outside of guild!').catch(err => console.error('Failed to send ephemeral reply:', err));
                 return;
             }
 
             const guildHolder = this.guilds.get(interaction.guildId)
             if (!guildHolder) {
-                replyEphemeral(interaction, 'Guild not found!')
+                replyEphemeral(interaction, 'Guild not found!').catch(err => console.error('Failed to send ephemeral reply:', err));
                 return;
             }
 
@@ -350,7 +350,7 @@ export class Bot {
                     }
                 } catch (error) {
                     console.error(error)
-                    return replyEphemeral(interaction, 'An error occurred while executing the command.')
+                    return replyEphemeral(interaction, 'An error occurred while executing the command.').catch(err => console.error('Failed to send ephemeral reply:', err));
                 }
             } else if (interaction.isButton()) {
                 const customId = interaction.customId.split('|')
@@ -361,7 +361,7 @@ export class Bot {
                     await button.execute(guildHolder, interaction, ...customId.slice(1))
                 } catch (error) {
                     console.error(error)
-                    return replyEphemeral(interaction, 'An error occurred while executing the button.')
+                    return replyEphemeral(interaction, 'An error occurred while executing the button.').catch(err => console.error('Failed to send ephemeral reply:', err));
                 }
             } else if (interaction.isAnySelectMenu()) {
                 const customId = interaction.customId.split('|')
@@ -372,7 +372,7 @@ export class Bot {
                     await menu.execute(guildHolder, interaction, ...customId.slice(1))
                 } catch (error) {
                     console.error(error)
-                    return replyEphemeral(interaction, 'An error occurred while executing the menu.')
+                    return replyEphemeral(interaction, 'An error occurred while executing the menu.').catch(err => console.error('Failed to send ephemeral reply:', err));
                 }
             } else if (interaction.isModalSubmit()) {
                 const customId = interaction.customId.split('|')
@@ -383,7 +383,7 @@ export class Bot {
                     await modal.execute(guildHolder, interaction, ...customId.slice(1))
                 } catch (error) {
                     console.error(error)
-                    return replyEphemeral(interaction, 'An error occurred while executing the modal.')
+                    return replyEphemeral(interaction, 'An error occurred while executing the modal.').catch(err => console.error('Failed to send ephemeral reply:', err));
                 }
             } else {
                 return replyEphemeral(interaction, 'Unknown interaction type!')

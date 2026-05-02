@@ -186,6 +186,8 @@ export class GuildHolder {
     async handleMemberAdd(member: GuildMember) {
         this.antiNukeManager.handleMemberAdd(member).catch(e => console.error('Error handling member add:', e));
 
+        this.checkAltAccount(member).catch(e => console.error(`Error checking alt account for user ${member.id}:`, e));
+
         // check thanks
         const userData = await this.userManager.getUserData(member.id);
         if (userData) {
@@ -206,6 +208,64 @@ export class GuildHolder {
                 }
             }
         }
+    }
+
+    private formatAccountAge(ms: number): string {
+        const hours = Math.floor(ms / (1000 * 60 * 60));
+        if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+        const days = Math.floor(hours / 24);
+        return `${days} day${days !== 1 ? 's' : ''}`;
+    }
+
+    public async checkAltAccount(member: GuildMember, force: boolean = false): Promise<boolean> {
+        if (!force && !this.getConfigManager().getConfig(GuildConfigs.ALT_ACCOUNT_DETECTION_ENABLED)) return false;
+        const modLogChannelId = this.getConfigManager().getConfig(GuildConfigs.MOD_LOG_CHANNEL_ID);
+        if (!modLogChannelId) return false;
+
+        const threshold = this.getConfigManager().getConfig(GuildConfigs.ALT_ACCOUNT_DETECTION_CREATION_THRESHOLD);
+        const createdAt = member.user.createdAt;
+        const joinedAt = member.joinedAt ?? new Date();
+        const accountAge = joinedAt.getTime() - createdAt.getTime();
+
+        if (accountAge < threshold) {
+            const modChannel = await this.getGuild().channels.fetch(modLogChannelId).catch(() => null);
+            if (!modChannel || !modChannel.isSendable()) return true;
+
+            const embed = new EmbedBuilder()
+                .setColor(0xFF8800)
+                .setTitle('Potential Alt Account Detected')
+                .setDescription(`<@${member.id}> joined with a recently created account.`)
+                .addFields(
+                    { name: 'User', value: `${member.user.tag} (${member.id})`, inline: false },
+                    { name: 'Account Created', value: `<t:${Math.floor(createdAt.getTime() / 1000)}:F> (<t:${Math.floor(createdAt.getTime() / 1000)}:R>)`, inline: true },
+                    { name: 'Account Age at Join', value: this.formatAccountAge(accountAge), inline: true }
+                )
+                .setThumbnail(member.user.displayAvatarURL())
+                .setTimestamp();
+
+            await modChannel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
+            return true;
+        }
+
+        return false;
+    }
+
+    public async scanMembersForAltAccounts(): Promise<{ total: number; flagged: GuildMember[] }> {
+        const threshold = this.getConfigManager().getConfig(GuildConfigs.ALT_ACCOUNT_DETECTION_CREATION_THRESHOLD);
+        const members = await this.getGuild().members.fetch();
+        const flagged: GuildMember[] = [];
+
+        for (const [, member] of members) {
+            const createdAt = member.user.createdAt;
+            const joinedAt = member.joinedAt;
+            if (!joinedAt) continue;
+            const accountAge = joinedAt.getTime() - createdAt.getTime();
+            if (accountAge < threshold) {
+                flagged.push(member);
+            }
+        }
+
+        return { total: members.size, flagged };
     }
 
     handleMemberUpdate(oldMember: GuildMember | PartialGuildMember, newMember: GuildMember) {
