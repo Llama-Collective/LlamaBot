@@ -529,9 +529,9 @@ export class GuildHolder {
                         continue;
                     }
 
-                    if (discordLink.channel === indexResults.entry.thread) {
-                        continue;
-                    }
+                    // if (discordLink.channel === indexResults.entry.thread) {
+                    //     continue;
+                    // }
 
                     if (toSend.find(item => item.code === indexResults.entry.code)) {
                         continue;
@@ -540,7 +540,7 @@ export class GuildHolder {
                     toSend.push({
                         code: indexResults.entry.code,
                         oldCode: null,
-                        moved: true,
+                        moved: false
                     });
                 }
 
