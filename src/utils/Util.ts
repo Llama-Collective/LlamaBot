@@ -118,7 +118,10 @@ export function getAuthorsString(authors: Author[] | null): string {
     }
     return authors.map(author => {
         if (author.type === AuthorType.DiscordInGuild) {
-            return `<@${author.id}>`;
+            // return `<@${author.id}>`;
+            // Because of https://support.discord.com/hc/en-us/community/posts/22954438916375--Suggestion-Make-mentions-of-user-IDs-visible-again-Now-they-just-show-unknown-user
+            // we must show the username as well or else it will just show unknown user which is not helpful at all
+            return `${author.url ? `[${escapeDiscordString(author.displayName)}](${author.url})` : escapeDiscordString(author.displayName)} (<@${author.id}>)`;
         } else if (author.type === AuthorType.DiscordLeftGuild) {
             return `${author.url ? `[${escapeDiscordString(author.displayName)}](${author.url})` : escapeDiscordString(author.displayName)} (<@${author.id}>)`;
         } else if (author.type === AuthorType.DiscordExternal) {
