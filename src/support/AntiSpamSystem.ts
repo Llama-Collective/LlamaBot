@@ -518,7 +518,7 @@ export class AntiSpamSystem {
             // check if urls are discord urls to the same guild - those are always allowed
             const isAllSafeDiscordUrls = urls.every(url => {
                 const discordRegex = /^https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)(?:\/(\d+))?$/g
-                const match = url.match(discordRegex);
+                const match = discordRegex.exec(url);
                 if (!match) return false;
 
                 const guildId = match[1];
