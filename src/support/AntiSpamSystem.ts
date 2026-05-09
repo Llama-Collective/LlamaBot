@@ -6,6 +6,7 @@ import { BanUserButton } from "../components/buttons/BanUserButton.js";
 import { LiftTimeoutButton } from "../components/buttons/LiftTimeoutButton.js";
 import { AttachmentsState, UserData } from "./UserData.js";
 import { replyEphemeral, truncateStringWithEllipsis } from "../utils/Util.js";
+import { DiscordLinkPattern } from "../utils/ReferenceUtils.js";
 
 
 type MessageRef = {
@@ -35,7 +36,7 @@ export class AntiSpamSystem {
     private transientMessageTracker = new Map<Snowflake, TransientMessagesForUser>();
     private lastTickTime = 0;
 
-    constructor(private guildHolder: GuildHolder) {}
+    constructor(private guildHolder: GuildHolder) { }
 
     private getMessageRef(message: Message | { channel: { id: Snowflake }, id: Snowflake }): string {
         return [message.channel.id, message.id].join('-');
@@ -233,7 +234,7 @@ export class AntiSpamSystem {
                 const guild = this.guildHolder.getGuild();
                 const channel = await guild.channels.fetch(pendingUser.channelId).catch(() => null);
                 if (channel?.isSendable()) {
-                    const followUpMessage = await channel.send({ 
+                    const followUpMessage = await channel.send({
                         content: `⚠️ <@${userId}>, you still have not verified that you're not a bot. **You have 2 minutes remaining before you are timed out.** Click the button in the ${pendingUser.warningURL ? `[original warning message](${pendingUser.warningURL})` : 'previous message'} to verify now!`,
                     });
 
@@ -504,12 +505,29 @@ export class AntiSpamSystem {
 
         const urlRegex = /(?:https?:\/\/|www\.)[^\s<]+/gi;
         const urls = Array.from(message.content.matchAll(urlRegex)).map(match => match[0]);
-        const hasUrl = urls.length > 0 || message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i);
+        const hasInvite = message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i);
+        const hasUrl = urls.length > 0 || hasInvite;
         const hasAttachment = message.attachments.size > 0;
         const isForwarded = message.messageSnapshots.size > 0;
 
         if (!hasAttachment && !hasUrl && !isForwarded) {
             return false;
+        }
+
+        if (!hasAttachment && !hasInvite) {
+            // check if urls are discord urls to the same guild - those are always allowed
+            const isAllSafeDiscordUrls = urls.every(url => {
+                const discordRegex = /^https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)(?:\/(\d+))?$/g
+                const match = url.match(discordRegex);
+                if (!match) return false;
+
+                const guildId = match[1];
+                return guildId === this.guildHolder.getGuild().id;
+            });
+
+            if (isAllSafeDiscordUrls) {
+                return false;
+            }
         }
 
         if (pendingSpamUser) {
