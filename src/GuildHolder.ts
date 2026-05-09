@@ -321,7 +321,7 @@ export class GuildHolder {
             await this.handleThanks(message).catch(e => {
                 console.error('Error handling thanks message:', e);
             });
-            
+
             return;
         } else if (message.channel.isThread()) {
             const dictionaryChannelId = this.getConfigManager().getConfig(GuildConfigs.DICTIONARY_CHANNEL_ID);
@@ -2224,7 +2224,13 @@ export class GuildHolder {
 
         for (let i = 0; i < split.length; i++) {
             if (i === 0) {
-                await message.reply({ content: split[i], allowedMentions: { parse: [] }, flags: [MessageFlags.SuppressNotifications, MessageFlags.SuppressEmbeds] }).catch(console.error);
+                try {
+                    await message.reply({ content: split[i], allowedMentions: { parse: [] }, flags: [MessageFlags.SuppressNotifications, MessageFlags.SuppressEmbeds] });
+                } catch (e) {
+                    // send as message
+                    await channel.send({ content: split[i], allowedMentions: { parse: [] }, flags: [MessageFlags.SuppressNotifications, MessageFlags.SuppressEmbeds] }).catch(console.error);
+                }
+
             } else {
                 await channel.send({ content: split[i], allowedMentions: { parse: [] }, flags: [MessageFlags.SuppressNotifications, MessageFlags.SuppressEmbeds] }).catch(console.error);
             }
