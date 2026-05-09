@@ -2197,6 +2197,10 @@ export class GuildHolder {
             if (ref.type === ReferenceType.DICTIONARY_TERM) {
                 return dictionaryEntriesRetrieved.has(ref.id);
             }
+            if (ref.type === ReferenceType.USER_MENTION) {
+                return false;
+            }
+            
             return true;
         });
 
