@@ -1731,7 +1731,7 @@ export class GuildHolder {
 
         const embed = new EmbedBuilder();
 
-        const imageURL = this.getPostThumbnailURL(oldEntryData);
+        const imageURL = oldEntryData.images && oldEntryData.images.length > 0 ? oldEntryData.images[0].url : null;
         if (imageURL) {
             embed.setThumbnail(imageURL);
         }
