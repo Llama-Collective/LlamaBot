@@ -971,14 +971,14 @@ export class DebugCommand implements Command {
 
                         // fixup the repository entry if it exists
                         const entry = await repositoryManager.findEntryBySubmissionId(submissionId);
-                        if (entry) {
-                            // check if attachments folder in repository exists
-                            const entryAttachmentsFolder = safeJoinPath(entry.entry.getFolderPath(), 'attachments');
-                            // check if it exists
-                            const attachmentsFolderExists = await fs.access(entryAttachmentsFolder).then(() => true).catch(() => false);
-                            if (attachmentsFolderExists) {
+                        if (entry && entry.entry.getData().attachments.length > 0) {
+                        
+                            // check each attachment, if it canDownload but no path then we need to republish to fix the attachment
+                            if (entry.entry.getData().attachments.some(a => {
+                                return a.canDownload && !a.path; 
+                            })) {
                                 // do nothing, its fine
-                            } else {
+                         
                                 // we need to republish
                                 await submission.publish(
                                     true,
