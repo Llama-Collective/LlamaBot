@@ -966,33 +966,35 @@ export class DebugCommand implements Command {
                     submission.getConfigManager().setConfig(SubmissionConfigs.ATTACHMENTS, attachments);
                     await submission.save();
 
-                    // check if published
-                    if (submission.getConfigManager().getConfig(SubmissionConfigs.STATUS) === SubmissionStatus.ACCEPTED) {
 
-                        // fixup the repository entry if it exists
-                        const entry = await repositoryManager.findEntryBySubmissionId(submissionId);
-                        if (entry && entry.entry.getData().attachments.length > 0) {
-                        
-                            // check each attachment, if it canDownload but no path then we need to republish to fix the attachment
-                            if (entry.entry.getData().attachments.some(a => {
-                                return a.canDownload && !a.path; 
-                            })) {
-                                // do nothing, its fine
-                         
-                                // we need to republish
-                                await submission.publish(
-                                    true,
-                                    false,
-                                    false,
-                                    {
-                                        message: `Fix broken attachments`,
-                                    }
-                                )
-                                republishedSubmissions++;
-                            }
+                    updatedSubmissions++;
+                }
+
+                // check if published
+                if (submission.getConfigManager().getConfig(SubmissionConfigs.STATUS) === SubmissionStatus.ACCEPTED) {
+
+                    // fixup the repository entry if it exists
+                    const entry = await repositoryManager.findEntryBySubmissionId(submissionId);
+                    if (entry && entry.entry.getData().attachments.length > 0) {
+
+                        // check each attachment, if it canDownload but no path then we need to republish to fix the attachment
+                        if (entry.entry.getData().attachments.some(a => {
+                            return a.canDownload && !a.path;
+                        })) {
+                            // do nothing, its fine
+
+                            // we need to republish
+                            await submission.publish(
+                                true,
+                                false,
+                                false,
+                                {
+                                    message: `Fix broken attachments`,
+                                }
+                            )
+                            republishedSubmissions++;
                         }
                     }
-                    updatedSubmissions++;
                 }
             }
 
