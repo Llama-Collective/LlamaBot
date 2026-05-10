@@ -1404,6 +1404,8 @@ export class RepositoryManager {
                     if (!item) continue;
                     if (!item.referencedBy.some(r => r === entryData?.code)) {
                         item.referencedBy.push(entryData.code);
+                        // sort referencedBy
+                        item.referencedBy.sort();
                         await this.dictionaryManager.saveEntry(item).catch(() => { });
                         await this.dictionaryManager.updateStatusMessage(item).catch(() => { });
                     }

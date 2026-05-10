@@ -368,6 +368,7 @@ export async function retagEverythingTask(guildHolder: GuildHolder): Promise<voi
             if (entryCodes && (entryCodes.size !== definition.referencedBy.length || entryCodes.intersection(new Set(definition.referencedBy)).size !== entryCodes.size)) {
                 changed = true;
                 definition.referencedBy = Array.from(entryCodes);
+                definition.referencedBy.sort();
             } else if (!entryCodes && definition.referencedBy.length > 0) {
                 changed = true;
                 definition.referencedBy = [];
