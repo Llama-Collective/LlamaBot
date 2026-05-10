@@ -9,7 +9,7 @@ import { Reference, tagReferencesInSubmissionRecords } from "../utils/ReferenceU
 import { RevisionEmbed } from "../embed/RevisionEmbed.js";
 import { AuthorType, DiscordAuthor } from "../submissions/Author.js";
 import { findWorldsInZip, optimizeWorldsInZip } from "../utils/WDLUtils.js";
-import { optimizeImage } from "../utils/AttachmentUtils.js";
+import { getFileKey, optimizeImage } from "../utils/AttachmentUtils.js";
 import { GuildConfigs } from "../config/GuildConfigs.js";
 import { DictionaryEntryStatus } from "../archive/DictionaryManager.js";
 import got from "got";
@@ -18,6 +18,7 @@ import fs from "fs/promises";
 import { SubmissionConfigs } from "../submissions/SubmissionConfigs.js";
 import { createHash } from "crypto";
 import { safeJoinPath } from "../utils/SafePath.js";
+import { SubmissionStatus } from "../submissions/SubmissionStatus.js";
 
 export class DebugCommand implements Command {
     getID(): string {
@@ -81,10 +82,14 @@ export class DebugCommand implements Command {
                     .setName('updatesubmissionsstatus')
                     .setDescription('Update the status of all submissions based on their archive status')
             )
+            // .addSubcommand(sub =>
+            //     sub
+            //         .setName('attachhashes')
+            //         .setDescription('Compute attachment hashes for archived posts and submissions')
+            // )
             .addSubcommand(sub =>
-                sub
-                    .setName('attachhashes')
-                    .setDescription('Compute attachment hashes for archived posts and submissions')
+                sub.setName('fixattachments')
+                    .setDescription('Fix missing attachments in archived posts and submissions by re-downloading them from Discord')
             )
             .addSubcommand(sub =>
                 sub
@@ -225,6 +230,9 @@ export class DebugCommand implements Command {
                 break;
             case 'attachhashes':
                 await this.handleAttachHashes(guildHolder, interaction);
+                break;
+            case 'fixattachments':
+                await this.handleAttachmentFix(guildHolder, interaction);
                 break;
             case 'backfillthumbnails':
                 await this.handleBackfillThumbnails(guildHolder, interaction);
@@ -893,6 +901,113 @@ export class DebugCommand implements Command {
                 `Archived posts: ${updatedPosts}/${scannedPosts} updated, attachments changed ${updatedPostAttachments}/${scannedPostAttachments}.\n` +
                 `Submissions: ${updatedSubmissions}/${scannedSubmissions} updated, attachments changed ${updatedSubmissionAttachments}/${scannedSubmissionAttachments}.\n` +
                 `Missing files: ${missingFiles}. Errors: ${errors}.`
+        });
+    }
+
+
+    private async handleAttachmentFix(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+        const repositoryManager = guildHolder.getRepositoryManager();
+        const submissionsManager = guildHolder.getSubmissionsManager();
+
+        let scannedSubmissions = 0;
+        let updatedSubmissions = 0;
+        let scannedSubmissionAttachments = 0;
+        let updatedSubmissionAttachments = 0;
+        let republishedSubmissions = 0;
+        let missingFiles = 0;
+        let errors = 0;
+
+        try {
+            const submissionIds = await submissionsManager.getSubmissionsList();
+            for (const submissionId of submissionIds) {
+                scannedSubmissions++;
+                const submission = await submissionsManager.getSubmission(submissionId);
+                if (!submission) {
+                    errors++;
+                    continue;
+                }
+
+                const attachments = submission.getConfigManager().getConfig(SubmissionConfigs.ATTACHMENTS) || [];
+                let submissionChanged = false;
+
+                for (const attachment of attachments) {
+                    scannedSubmissionAttachments++;
+                    if (!attachment.path) {
+                        // try make path
+                        const potentialPath = getFileKey(attachment);
+                        // check if file exists
+                        const attachmentPath = safeJoinPath(submission.getAttachmentFolder(), potentialPath);
+                        const fileExists = await fs.access(attachmentPath).then(() => true).catch(() => false);
+                        if (fileExists) {
+                            attachment.path = potentialPath;
+                            submissionChanged = true;
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    const attachmentPath = safeJoinPath(submission.getAttachmentFolder(), attachment.path);
+                    const hash = await this.hashAttachmentFile(attachmentPath);
+                    if (!hash) {
+                        missingFiles++;
+                        continue;
+                    }
+
+                    if (attachment.hash !== hash) {
+                        attachment.hash = hash;
+                        submissionChanged = true;
+                        updatedSubmissionAttachments++;
+                    }
+                }
+
+                if (submissionChanged) {
+                    submission.getConfigManager().setConfig(SubmissionConfigs.ATTACHMENTS, attachments);
+                    await submission.save();
+
+                    // check if published
+                    if (submission.getConfigManager().getConfig(SubmissionConfigs.STATUS) === SubmissionStatus.ACCEPTED) {
+
+                        // fixup the repository entry if it exists
+                        const entry = await repositoryManager.findEntryBySubmissionId(submissionId);
+                        if (entry) {
+                            // check if attachments folder in repository exists
+                            const entryAttachmentsFolder = safeJoinPath(entry.entry.getFolderPath(), 'attachments');
+                            // check if it exists
+                            const attachmentsFolderExists = await fs.access(entryAttachmentsFolder).then(() => true).catch(() => false);
+                            if (attachmentsFolderExists) {
+                                // do nothing, its fine
+                            } else {
+                                // we need to republish
+                                await submission.publish(
+                                    true,
+                                    false,
+                                    false,
+                                    {
+                                        message: `Fix broken attachments`,
+                                    }
+                                )
+                                republishedSubmissions++;
+                            }
+                        }
+                    }
+                    updatedSubmissions++;
+                }
+            }
+
+        } catch (error: any) {
+            errors++;
+            console.error('Error while fixing attachments:', error);
+            await interaction.editReply({ content: `attachmentFix failed: ${error?.message || 'Unknown error'}` });
+            return;
+        }
+
+        await interaction.editReply({
+            content:
+                `attachmentFix complete.\n` +
+                `Submissions: ${updatedSubmissions}/${scannedSubmissions} updated, attachments changed ${updatedSubmissionAttachments}/${scannedSubmissionAttachments}.\n` +
+                `Missing files: ${missingFiles}. Errors: ${errors}. Republished: ${republishedSubmissions}.`
         });
     }
 
