@@ -5,7 +5,7 @@ import { GuildConfigs } from "./config/GuildConfigs.js";
 import { SubmissionsManager } from "./submissions/SubmissionsManager.js";
 import { RepositoryManager } from "./archive/RepositoryManager.js";
 import { ArchiveEntry, ArchiveEntryData } from "./archive/ArchiveEntry.js";
-import { deepClone, escapeDiscordString, getAuthorName, getAuthorsString, getChanges, getCodeAndDescriptionFromTopic, splitIntoChunks, truncateStringWithEllipsis } from "./utils/Util.js";
+import { deepClone, escapeDiscordString, getAuthorName, getAuthorsString, getChanges, getCodeAndDescriptionFromTopic, isDiscordAuthor, splitIntoChunks, truncateStringWithEllipsis } from "./utils/Util.js";
 import { UserManager } from "./support/UserManager.js";
 import { UserData } from "./support/UserData.js";
 import { SubmissionConfigs } from "./submissions/SubmissionConfigs.js";
@@ -1551,8 +1551,8 @@ export class GuildHolder {
             return;
         }
 
-        const oldDesigners = oldAuthors.filter(a => a.type === AuthorType.DiscordInGuild && !a.dontDisplay) as DiscordAuthor[];
-        const newDesigners = newAuthors.filter(a => a.type === AuthorType.DiscordInGuild && !a.dontDisplay) as DiscordAuthor[];
+        const oldDesigners = oldAuthors.filter(a => isDiscordAuthor(a) && !a.dontDisplay) as DiscordAuthor[];
+        const newDesigners = newAuthors.filter(a => isDiscordAuthor(a) && !a.dontDisplay) as DiscordAuthor[];
 
         const oldDesignerIds = oldDesigners.map(a => a.id);
         const newDesignerIds = newDesigners.map(a => a.id);

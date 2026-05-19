@@ -112,6 +112,10 @@ export function escapeString(str: string): string {
         .replace(/[^a-zA-Z0-9_\-.]/g, '')
 }
 
+export function isDiscordAuthor(author: Author): author is DiscordAuthor {
+    return author.type === AuthorType.DiscordInGuild || author.type === AuthorType.DiscordLeftGuild || author.type === AuthorType.DiscordExternal || author.type === AuthorType.DiscordDeleted;
+}
+
 export function getAuthorsString(authors: Author[] | null): string {
     if (!authors || authors.length === 0) {
         return 'No authors';
