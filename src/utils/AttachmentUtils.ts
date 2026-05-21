@@ -188,11 +188,11 @@ export async function processImageForDiscord(file_path: string, temp_dir: string
             newHeight = newHeight - padding;
         } else if (num_images === 3) { // Three images
             if (image_idx === 0) { // First image is large
-                newWidth = 2 * Math.floor(newWidth / 3) - 15;
+                newWidth = Math.floor(newWidth / 2) - 15;
                 newHeight = newHeight;
             } else { // Other two images are small
-                newWidth = Math.floor(newWidth / 3) - 15;
-                newHeight = Math.floor(newHeight / 2) - 15;
+                newWidth = Math.floor(newWidth / 2) - 15;
+                newHeight = Math.floor(newHeight / 2) - 10;
             }
             padding = 0;
         } else { // More than or equal to four images, all are tiny
