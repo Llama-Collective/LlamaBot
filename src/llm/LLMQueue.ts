@@ -6,6 +6,7 @@ import { LLMResponse } from "./LLMResponse.js";
 import { Bot } from "../Bot.js";
 import { generateText, jsonSchema, Output } from "ai";
 import { SubmissionRecords } from "../utils/MarkdownUtils.js";
+import { JSONSchema7 } from "json-schema";
 
 
 // const URL = 'http://localhost:8000/generate'
@@ -152,7 +153,7 @@ export class LLMQueue {
         const result = await generateText({
             model: paidLLMClient("gpt-5.4-nano"),
             output: Output.object({
-                schema: jsonSchema(request.schema)
+                schema: jsonSchema(this.toOpenAIStrictSchema(request.schema))
             }),
             prompt: request.prompt.generatePrompt(),
         })
@@ -162,9 +163,99 @@ export class LLMQueue {
         }
 
         return {
-            result: result.output as SubmissionRecords,
+            result: this.removeNullValues(result.output) as SubmissionRecords,
             error: undefined
         }
+    }
+
+    private toOpenAIStrictSchema(schema: JSONSchema7): JSONSchema7 {
+        const strictSchema = structuredClone(schema);
+        this.normalizeObjectSchema(strictSchema);
+        return strictSchema;
+    }
+
+    private normalizeObjectSchema(schema: JSONSchema7): void {
+        if (schema.properties) {
+            const required = new Set((schema.required || []).map(String));
+            const propertyNames = Object.keys(schema.properties);
+
+            for (const propertyName of propertyNames) {
+                const propertySchema = schema.properties[propertyName];
+                if (typeof propertySchema === 'boolean') {
+                    continue;
+                }
+
+                this.normalizeObjectSchema(propertySchema);
+
+                if (!required.has(propertyName)) {
+                    schema.properties[propertyName] = this.makeNullable(propertySchema);
+                }
+            }
+
+            schema.required = propertyNames;
+            schema.additionalProperties = false;
+        }
+
+        if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)) {
+            this.normalizeObjectSchema(schema.items);
+        }
+
+        for (const key of ['anyOf', 'oneOf', 'allOf'] as const) {
+            const variants = schema[key];
+            if (Array.isArray(variants)) {
+                for (const variant of variants) {
+                    if (typeof variant !== 'boolean') {
+                        this.normalizeObjectSchema(variant);
+                    }
+                }
+            }
+        }
+    }
+
+    private makeNullable(schema: JSONSchema7): JSONSchema7 {
+        if (schema.type === 'null') {
+            return schema;
+        }
+
+        if (Array.isArray(schema.type) && schema.type.includes('null')) {
+            return schema;
+        }
+
+        if (schema.anyOf?.some(variant => typeof variant !== 'boolean' && variant.type === 'null')) {
+            return schema;
+        }
+
+        return {
+            anyOf: [
+                schema,
+                { type: 'null' }
+            ]
+        };
+    }
+
+    private removeNullValues(value: unknown): unknown {
+        if (value === null || value === undefined) {
+            return undefined;
+        }
+
+        if (Array.isArray(value)) {
+            return value
+                .map(item => this.removeNullValues(item))
+                .filter(item => item !== undefined);
+        }
+
+        if (typeof value === 'object') {
+            const output: Record<string, unknown> = {};
+            for (const [key, nestedValue] of Object.entries(value)) {
+                const cleanedValue = this.removeNullValues(nestedValue);
+                if (cleanedValue !== undefined) {
+                    output[key] = cleanedValue;
+                }
+            }
+            return output;
+        }
+
+        return value;
     }
 
     private async processRequest(request: LLMRequest): Promise<LLMResponse> {

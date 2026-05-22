@@ -1902,7 +1902,7 @@ export class GuildHolder {
                             tags: z.array(z.string()).describe('List of tags associated with the design.'),
                             description: z.string().describe('A description of the design.'),
                         })).describe('Top 5 list of Minecraft redstone designs matching the search query.'),
-                        error: z.string().optional().describe('An error message, if an error occurred during the search.'),
+                        error: z.string().nullable().describe('An error message, if an error occurred during the search.'),
                     })
                 ),
                 execute: async (input: { query: string }) => {
@@ -1953,7 +1953,7 @@ export class GuildHolder {
                                 });
                             }
                         }
-                        return { results };
+                        return { results, error: null };
                     } catch (e) {
                         console.error('Error during search execution:', e);
                         return { results: [], error: 'Error during search execution' };
@@ -1971,7 +1971,7 @@ export class GuildHolder {
                             terms: z.string().describe('The terms defined.'),
                             definition: z.string().describe('The definition.'),
                         })).describe('Top 5 list of definitions matching the search query.'),
-                        error: z.string().optional().describe('An error message, if an error occurred during the search.'),
+                        error: z.string().nullable().describe('An error message, if an error occurred during the search.'),
                     })
                 ),
                 execute: async (input: { query: string }) => {
@@ -2000,7 +2000,7 @@ export class GuildHolder {
                             }
                         }
 
-                        return { results };
+                        return { results, error: null };
                     } catch (e) {
                         console.error('Error during define execution:', e);
                         return { results: [], error: 'Error during define execution' };
@@ -2045,7 +2045,7 @@ export class GuildHolder {
                     z.object({
                         success: z.boolean().describe('Whether the warning was successfully issued.'),
                         numWarnings: z.number().describe('The number of warnings the user has received. Mention this in your response to help the moderators decide on further action.'),
-                        error: z.string().optional().describe('An error message, if an error occurred while issuing the warning.'),
+                        error: z.string().nullable().describe('An error message, if an error occurred while issuing the warning.'),
                     })
                 ),
                 execute: async (input: { user_id: string; reason: string }) => {
@@ -2068,7 +2068,7 @@ export class GuildHolder {
 
                         await this.userManager.saveUserData(userData);
 
-                        return { success: true, numWarnings: userData.llmWarnings.filter(w => (Date.now() - w.timestamp) < (30 * 24 * 60 * 60 * 1000)).length };
+                        return { success: true, numWarnings: userData.llmWarnings.filter(w => (Date.now() - w.timestamp) < (30 * 24 * 60 * 60 * 1000)).length, error: null };
                     } catch (e) {
                         console.error('Error issuing warning to user:', e);
                         return { success: false, numWarnings: 0, error: 'Error issuing warning to user' };
@@ -2091,7 +2091,7 @@ export class GuildHolder {
                             category: z.string().describe('The category of the factsheet entry.'),
                             credibility: z.number().describe('The credibility level of the factsheet entry. Higher numbers indicate more credibility.'),
                         })).describe('Top 5 list of factsheet entries matching the search query.'),
-                        error: z.string().optional().describe('An error message, if an error occurred during the search.'),
+                        error: z.string().nullable().describe('An error message, if an error occurred during the search.'),
                     })
                 ),
                 execute: async (input: { query: string }) => {
@@ -2118,7 +2118,7 @@ export class GuildHolder {
                                 });
                             }
                         }
-                        return { results: data };
+                        return { results: data, error: null };
                     } catch (e) {
                         console.error('Error during factsheet query execution:', e);
                         return { results: [], error: 'Error during factsheet query execution' };
@@ -2136,7 +2136,7 @@ export class GuildHolder {
                 {
                     schema: zodSchema(
                         z.object({
-                            response_text: z.string().optional().describe('The raw text of the response to be sent in the Discord channel. Optional, may be empty if no response is needed. You can use markdown formatting here, but tables are not supported.'),
+                            response_text: z.string().nullable().describe('The raw text of the response to be sent in the Discord channel. Null or empty string means no response is needed. You can use markdown formatting here, but tables are not supported.'),
                         })
                     ),
                 }
@@ -2154,7 +2154,7 @@ export class GuildHolder {
         }
 
         // replace @username with actual mentions if possible
-        let responseText = response.output.response_text || '';
+        let responseText = response.output.response_text ?? '';
 
         if (!responseText) {
             return '';
