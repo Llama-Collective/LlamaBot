@@ -7,6 +7,7 @@ import { Bot } from "../Bot.js";
 import { generateText, jsonSchema, Output } from "ai";
 import { SubmissionRecords } from "../utils/MarkdownUtils.js";
 import { JSONSchema7 } from "json-schema";
+import { OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai";
 
 
 // const URL = 'http://localhost:8000/generate'
@@ -156,6 +157,12 @@ export class LLMQueue {
                 schema: jsonSchema(this.toOpenAIStrictSchema(request.schema))
             }),
             prompt: request.prompt.generatePrompt(),
+
+            providerOptions: {
+                openai: {
+                    store: false,
+                } satisfies OpenAILanguageModelResponsesOptions
+            }
         })
 
         if (!result.output) {

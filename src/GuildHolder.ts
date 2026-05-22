@@ -29,6 +29,7 @@ import { AliasManager } from "./support/AliasManager.js";
 import { AntiSpamSystem } from "./support/AntiSpamSystem.js";
 import { PublishCommitMessage } from "./submissions/Publish.js";
 import { safeJoinPath } from "./utils/SafePath.js";
+import { OpenAILanguageModelResponsesOptions } from "@ai-sdk/openai";
 /**
  * GuildHolder is a class that manages guild-related data.
  */
@@ -1001,11 +1002,15 @@ export class GuildHolder {
 
         const response = await generateText({
             model: client("gpt-5.4-nano"),
-            messages: [
-                { role: 'system', content: systemPrompt } as ModelMessage,
-                { role: 'user', content: userPrompt } as ModelMessage
-            ],
+            system: systemPrompt,
+            prompt: userPrompt,
             maxOutputTokens: 300,
+
+            providerOptions: {
+                openai: {
+                    store: false,
+                } satisfies OpenAILanguageModelResponsesOptions
+            }
         });
 
         if (!response.text) {
@@ -2158,10 +2163,15 @@ export class GuildHolder {
                     ),
                 }
             ),
+            providerOptions: {
+                openai: {
+                    store: false,
+                } satisfies OpenAILanguageModelResponsesOptions
+            }
         });
-        
+
         const response = await agent.generate({
-             messages: messagesIn.map(m => m.obj),
+            messages: messagesIn.map(m => m.obj),
         })
 
 
@@ -2240,7 +2250,7 @@ export class GuildHolder {
             if (ref.type === ReferenceType.USER_MENTION) {
                 return false;
             }
-            
+
             return true;
         });
 
