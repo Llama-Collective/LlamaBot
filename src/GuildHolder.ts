@@ -1803,6 +1803,7 @@ export class GuildHolder {
             'Then use the archive search tool to find relevant designs.',
             'If the tools return nothing relevant, say you do not know instead of guessing.',
             'You must use multiple tools to gather information before responding, and you can call the same tool multiple times if needed.',
+            'All tools use semantic search with vector databases, so they can find relevant information even if you use full sentences in your queries.',
             "When you reference something from the archive search tool, mention the design's code in the response.",
             'NEVER use emojis or em-dashes.',
             'User mentions use the format <@UserID> and are prepended to their messages—include the correct mention when responding.',
