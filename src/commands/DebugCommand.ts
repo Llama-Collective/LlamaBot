@@ -193,6 +193,11 @@ export class DebugCommand implements Command {
                             .setRequired(true)
                     )
             )
+            .addSubcommand(sub =>
+                sub
+                    .setName('getqueries')
+                    .setDescription('Show the last conversational LLM tool calls')
+            )
 
         return data;
     }
@@ -264,6 +269,9 @@ export class DebugCommand implements Command {
             case 'optimizeimage':
                 await this.handleOptimizeImage(interaction);
                 break;
+            case 'getqueries':
+                await this.handleGetQueries(guildHolder, interaction);
+                break;
             case 'restoretags':
                 await this.handleRestoreTags(guildHolder, interaction);
                 break;
@@ -272,6 +280,28 @@ export class DebugCommand implements Command {
                 break;
             default:
                 await replyEphemeral(interaction, 'Unknown subcommand.');
+        }
+    }
+
+    private async handleGetQueries(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
+        const toolUsages = guildHolder.getLastToolUsages();
+        if (toolUsages.length === 0) {
+            await replyEphemeral(interaction, 'No tool calls recorded for the last conversational response.');
+            return;
+        }
+
+        const lines = toolUsages.map((usage, index) => {
+            const query = usage.query.trim() || '(no query)';
+            return `${index + 1}. ${usage.toolName}: ${truncateStringWithEllipsis(query, 1500)}`;
+        });
+
+        const chunks = splitIntoChunks(lines.join('\n'), 1900);
+        await replyEphemeral(interaction, chunks[0], { allowedMentions: { parse: [] } });
+        for (let i = 1; i < chunks.length; i++) {
+            await interaction.followUp({
+                content: chunks[i],
+                allowedMentions: { parse: [] },
+            });
         }
     }
 

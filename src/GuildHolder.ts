@@ -90,6 +90,8 @@ export class GuildHolder {
     private privateFactBase: PrivateFactBase;
     private aliasManager: AliasManager;
 
+    private lastToolUsages?: { toolName: string; query: string; }[] = [];
+
     /**
      * Creates a new GuildHolder instance.
      * @param bot The bot instance associated with this guild holder.
@@ -1776,6 +1778,10 @@ export class GuildHolder {
         return this.bot.openAIClient !== undefined;
     }
 
+    public getLastToolUsages(): { toolName: string; query: string; }[] {
+        return [...this.lastToolUsages];
+    }
+
     public async respondToConversation(channel: TextChannel | TextThreadChannel, message: Message) {
         if (!this.bot.openAIClient) {
             throw new Error('LLM client not configured');
@@ -1886,7 +1892,7 @@ export class GuildHolder {
         });
 
         const dictionaryEntriesRetrieved = new Set<Snowflake>();
-
+        const toolUsage: { toolName: string; query: string; }[] = [];
         const tools: Record<string, Tool> = {
             search: {
                 description: 'Lookup designs and resources made by expert Minecraft redstone engineers using semantic search.',
@@ -1906,6 +1912,7 @@ export class GuildHolder {
                     })
                 ),
                 execute: async (input: { query: string }) => {
+                    toolUsage.push({ toolName: 'search', query: input.query });
                     const queryEmbeddings = await generateQueryEmbeddings([input.query.trim()]).catch(e => {
                         console.error('Error generating query embeddings:', e);
                         return null;
@@ -1975,6 +1982,7 @@ export class GuildHolder {
                     })
                 ),
                 execute: async (input: { query: string }) => {
+                    toolUsage.push({ toolName: 'define', query: input.query });
                     const queryEmbeddings = await generateQueryEmbeddings([input.query.trim()]).catch(e => {
                         console.error('Error generating query embeddings:', e);
                         return null;
@@ -2020,6 +2028,7 @@ export class GuildHolder {
                     })
                 ),
                 execute: async (_input: {}) => {
+                    toolUsage.push({ toolName: 'channels', query: '' });
                     const channels: { name: string; topic: string; isArchiveChannel: boolean }[] = [];
                     const archiveCategories = this.getConfigManager().getConfig(GuildConfigs.ARCHIVE_CATEGORY_IDS) || [];
                     const allchannels = this.guild.channels.cache;
@@ -2049,6 +2058,7 @@ export class GuildHolder {
                     })
                 ),
                 execute: async (input: { user_id: string; reason: string }) => {
+                    toolUsage.push({ toolName: 'warn_user', query: `user_id: ${input.user_id}, reason: ${input.reason}` });
                     try {
                         const member = await this.guild.members.fetch(input.user_id).catch(() => undefined);
                         if (!member) {
@@ -2095,6 +2105,7 @@ export class GuildHolder {
                     })
                 ),
                 execute: async (input: { query: string }) => {
+                    toolUsage.push({ toolName: 'facts', query: input.query });
                     // console.log('Executing factsheet tool with query:', input.query);
                     const queryEmbeddings = await generateQueryEmbeddings([input.query.trim()]).catch(e => {
                         console.error('Error generating query embeddings:', e);
@@ -2143,6 +2154,8 @@ export class GuildHolder {
             ),
             tools: tools
         })
+
+        this.lastToolUsages = toolUsage;
 
         if (response.warnings?.length) {
             console.warn('LLM Warnings:', response.warnings);
