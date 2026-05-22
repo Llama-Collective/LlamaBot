@@ -285,7 +285,7 @@ export class DebugCommand implements Command {
 
     private async handleGetQueries(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
         const toolUsages = guildHolder.getLastToolUsages();
-        if (toolUsages.length === 0) {
+        if (!toolUsages || toolUsages.length === 0) {
             await replyEphemeral(interaction, 'No tool calls recorded for the last conversational response.');
             return;
         }
@@ -296,7 +296,7 @@ export class DebugCommand implements Command {
         });
 
         const chunks = splitIntoChunks(lines.join('\n'), 1900);
-        await replyEphemeral(interaction, chunks[0], { allowedMentions: { parse: [] } });
+        await interaction.reply({ content: chunks[0], allowedMentions: { parse: [] } });
         for (let i = 1; i < chunks.length; i++) {
             await interaction.followUp({
                 content: chunks[i],

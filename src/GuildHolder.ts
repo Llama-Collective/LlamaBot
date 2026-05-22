@@ -1778,8 +1778,8 @@ export class GuildHolder {
         return this.bot.openAIClient !== undefined;
     }
 
-    public getLastToolUsages(): { toolName: string; query: string; }[] {
-        return [...this.lastToolUsages];
+    public getLastToolUsages(): undefined | { toolName: string; query: string; }[] {
+        return this.lastToolUsages;
     }
 
     public async respondToConversation(channel: TextChannel | TextThreadChannel, message: Message) {
@@ -1800,6 +1800,7 @@ export class GuildHolder {
             'Always call the facts tool before giving advice about designs, redstone behavior, moderation policy, or community history.',
             "Don't mention the existence of the tools themselves to users, especially the facts tool. Don't say 'Facts say' or similar.",
             'If the tools return nothing relevant, say you do not know instead of guessing.',
+            'You can call multiple tools to gather information before responding, and you can call the same tool multiple times if needed.',
             "When you use something from the archive search tool, mention the design's code so users can look it up themselves.",
             'NEVER use emojis or em-dashes.',
             'User mentions use the format <@UserID> and are prepended to their messages—include the correct mention when responding.'
