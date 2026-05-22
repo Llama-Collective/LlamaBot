@@ -1807,7 +1807,8 @@ export class GuildHolder {
             "When you reference something from the archive search tool, mention the design's code in the response.",
             'NEVER use emojis or em-dashes.',
             'User mentions use the format <@UserID> and are prepended to their messages—include the correct mention when responding.',
-            'Channel mentions use the format #channel-name.'
+            'Channel mentions use the format #channel-name.',
+            'Use markdown sparingly to improve readability, but do not over-format.',
         ];
         const sharedPrompt = sharedPromptLines.join('\n');
         const specialQuestions = ['who is right', 'is this true', 'translate'];
