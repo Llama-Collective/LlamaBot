@@ -13,7 +13,7 @@ import { SubmissionStatus } from "./submissions/SubmissionStatus.js";
 import fs from "fs/promises";
 import { countCharactersInRecord, getEffectiveStyle, postToMarkdown, StyleInfo } from "./utils/MarkdownUtils.js";
 import { Author, AuthorType, DiscordAuthor } from "./submissions/Author.js";
-import { generateText, JSONSchema7, ModelMessage, Output, stepCountIs, Tool, zodSchema } from "ai";
+import { generateText, JSONSchema7, ModelMessage, Output, stepCountIs, Tool, ToolLoopAgent, zodSchema } from "ai";
 import { UserSubscriptionManager } from "./config/UserSubscriptionManager.js";
 import { ChannelSubscriptionManager } from "./config/ChannelSubscriptionManager.js";
 import { AntiNukeManager } from "./support/AntiNukeManager.js";
@@ -2139,10 +2139,10 @@ export class GuildHolder {
             }
         }
 
-        const response = await generateText({
-            model: model,
-            system: systemPrompt,
-            messages: messagesIn.map(m => m.obj),
+        const agent = new ToolLoopAgent({
+            model,
+            instructions: systemPrompt,
+            tools,
             stopWhen: stepCountIs(20),
             output: Output.object(
                 {
@@ -2153,8 +2153,29 @@ export class GuildHolder {
                     ),
                 }
             ),
-            tools: tools
+        });
+        
+        const response = await agent.generate({
+             messages: messagesIn.map(m => m.obj),
         })
+
+
+        // const response = await generateText({
+        //     model: model,
+        //     system: systemPrompt,
+        //     messages: messagesIn.map(m => m.obj),
+        //     stopWhen: stepCountIs(20),
+        //     output: Output.object(
+        //         {
+        //             schema: zodSchema(
+        //                 z.object({
+        //                     response_text: z.string().nullable().describe('The raw text of the response to be sent in the Discord channel. Null or empty string means no response is needed. You can use markdown formatting here, but tables are not supported.'),
+        //                 })
+        //             ),
+        //         }
+        //     ),
+        //     tools: tools
+        // })
 
         this.lastToolUsages = toolUsage;
 
