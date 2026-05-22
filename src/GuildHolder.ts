@@ -1889,9 +1889,9 @@ export class GuildHolder {
 
         const tools: Record<string, Tool> = {
             search: {
-                description: 'Lookup designs made by expert Minecraft redstone engineers using semantic search.',
+                description: 'Lookup designs and resources made by expert Minecraft redstone engineers using semantic search.',
                 inputSchema: z.object({
-                    query: z.string().min(1).max(256).describe('The search query to find relevant Minecraft redstone designs.'),
+                    query: z.string().min(1).max(256).describe('The search query to find relevant Minecraft redstone designs and resources.'),
                 }),
                 outputSchema: zodSchema(
                     z.object({
