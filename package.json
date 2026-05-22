@@ -18,6 +18,7 @@
     "typescript-eslint": "^8.50.1"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.65",
     "@ai-sdk/xai": "^3.0.25",
     "@types/express": "^5.0.6",
     "@types/json-schema": "^7.0.15",

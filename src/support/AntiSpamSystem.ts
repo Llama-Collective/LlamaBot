@@ -6,7 +6,6 @@ import { BanUserButton } from "../components/buttons/BanUserButton.js";
 import { LiftTimeoutButton } from "../components/buttons/LiftTimeoutButton.js";
 import { AttachmentsState, UserData } from "./UserData.js";
 import { replyEphemeral, truncateStringWithEllipsis } from "../utils/Util.js";
-import { DiscordLinkPattern } from "../utils/ReferenceUtils.js";
 
 
 type MessageRef = {

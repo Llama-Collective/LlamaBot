@@ -13,13 +13,13 @@ import { getMenus } from "./components/menus/index.js";
 import { getModals } from "./components/modals/index.js";
 import { TempDataStore } from "./utils/TempDataStore.js";
 import { App } from "octokit";
-import { createXai, XaiProvider } from "@ai-sdk/xai";
 import { ContextMenuCommand } from "./interface/ContextMenuCommand.js";
 import { DiscordServersDictionary } from "./archive/DiscordServersDictionary.js";
 import { GuildWhitelistManager } from "./config/GuildWhitelistManager.js";
 import { APITokenManager } from "./api/APITokenManager.js";
 import { SysAdminCommandHandler } from "./sysadmin/SysAdminCommandHandler.js";
 import { safeJoinPath } from "./utils/SafePath.js";
+import { createOpenAI, OpenAIProvider } from "@ai-sdk/openai";
 
 export const SysAdmin = '239078039831445504';
 
@@ -30,7 +30,8 @@ export type Secrets = {
     token: string;
     clientId: string;
     githubAppId: string;
-    xaiApiKey?: string;
+    // xaiApiKey?: string;
+    openAIApiKey?: string;
 }
 
 /**
@@ -87,10 +88,13 @@ export class Bot {
      */
     githubClient?: App;
 
-    /**
-     * Xai bot client
-     */
-    xaiClient?: XaiProvider;
+    // /**
+    //  * Xai bot client
+    //  */
+    // xaiClient?: XaiProvider;
+
+    // OpenAI client
+    openAIClient?: OpenAIProvider;
 
     /**
      * Global Discord servers dictionary, shared across guilds.
@@ -167,12 +171,17 @@ export class Bot {
             privateKey: await fs.readFile(safeJoinPath(process.cwd(), 'key.pem'), 'utf-8'),
         });
 
-        if (secrets.xaiApiKey) {
-            const xaiClient = createXai({
-                apiKey: secrets.xaiApiKey
+        // if (secrets.xaiApiKey) {
+        //     const xaiClient = createXai({
+        //         apiKey: secrets.xaiApiKey
+        //     });
+        //     this.xaiClient = xaiClient;
+        // }
+        if (secrets.openAIApiKey) {
+            const openAIClient = createOpenAI({
+                apiKey: secrets.openAIApiKey
             });
-            // const model = xaiClient("grok-3-mini");
-            this.xaiClient = xaiClient;
+            this.openAIClient = openAIClient;
         }
 
         return new Promise((resolve, reject) => {

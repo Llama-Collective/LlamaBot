@@ -144,13 +144,13 @@ export class LLMQueue {
     }
 
     private async paidModelProcess(request: LLMRequest): Promise<LLMResponse> {
-        const paidLLMClient = this.bot.xaiClient;
+        const paidLLMClient = this.bot.openAIClient;
         if (!paidLLMClient) {
             throw new Error('Paid LLM client is not configured');
         }
 
         const result = await generateText({
-            model: paidLLMClient("grok-4-1-fast-non-reasoning"),
+            model: paidLLMClient("gpt-5.4-nano"),
             output: Output.object({
                 schema: jsonSchema(request.schema)
             }),
@@ -169,7 +169,7 @@ export class LLMQueue {
 
     private async processRequest(request: LLMRequest): Promise<LLMResponse> {
         try {
-            const paidLLMClient = this.bot.xaiClient;
+            const paidLLMClient = this.bot.openAIClient;
             if (!paidLLMClient) {
                 return await this.localModelProcess(request);
             }

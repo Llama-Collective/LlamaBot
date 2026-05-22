@@ -957,7 +957,7 @@ export class GuildHolder {
     }
 
     private async inferThanksRecipient(message: Message): Promise<{ userId: Snowflake | null, usernameHint?: string }> {
-        const client = this.getBot().xaiClient;
+        const client = this.getBot().openAIClient;
         if (!client) {
             return { userId: null };
         }
@@ -998,7 +998,7 @@ export class GuildHolder {
         const userPrompt = `Recent messages in the channel from oldest to newest:\n${history}\n\nFigure out who <@${message.author.id}> is thanking in the message marked "(thanks message)".`;
 
         const response = await generateText({
-            model: client("grok-4-1-fast-non-reasoning"),
+            model: client("gpt-5.4-nano"),
             messages: [
                 { role: 'system', content: systemPrompt } as ModelMessage,
                 { role: 'user', content: userPrompt } as ModelMessage
@@ -1773,11 +1773,11 @@ export class GuildHolder {
 
 
     public canConverse() {
-        return this.bot.xaiClient !== undefined;
+        return this.bot.openAIClient !== undefined;
     }
 
     public async respondToConversation(channel: TextChannel | TextThreadChannel, message: Message) {
-        if (!this.bot.xaiClient) {
+        if (!this.bot.openAIClient) {
             throw new Error('LLM client not configured');
         }
 
@@ -1802,7 +1802,7 @@ export class GuildHolder {
         const specialQuestions = ['who is right', 'is this true', 'translate'];
         if (specialQuestions.some(q => message.content.toLowerCase().includes(q))) {
             contextLength = 50; // more context for "who is right" questions
-            model = this.bot.xaiClient("grok-4-1-fast-reasoning"); // use better model for complex questions
+            model = this.bot.openAIClient("gpt-5.4-mini"); // use better model for complex questions
             const specialPromptLines = [
                 sharedPrompt,
                 'You are reviewing conflicting or high-risk claims, so double-check every statement with the facts tool or other resources before responding.',
@@ -1812,7 +1812,7 @@ export class GuildHolder {
             systemPrompt = specialPromptLines.join('\n\n');
         } else {
             contextLength = 10;
-            model = this.bot.xaiClient("grok-4-1-fast-reasoning"); // use faster model for normal questions
+            model = this.bot.openAIClient("gpt-5.4-nano"); // use faster model for normal questions
             const defaultPromptLines = [
                 sharedPrompt,
                 `You are talking in a channel called #${channelName}.`,
