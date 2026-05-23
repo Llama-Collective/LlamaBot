@@ -504,7 +504,7 @@ export class AntiSpamSystem {
 
         const urlRegex = /(?:https?:\/\/|www\.)[^\s<]+/gi;
         const urls = Array.from(message.content.matchAll(urlRegex)).map(match => match[0]);
-        const hasInvite = message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i);
+        const hasInvite = message.content.match(/discord\.gg\/\w+/i) || message.content.match(/discordapp\.com\/invite\/\w+/i) || message.content.match(/discord\.com\/invite\/\w+/i);
         const hasUrl = urls.length > 0 || hasInvite;
         const hasAttachment = message.attachments.size > 0;
         const isForwarded = message.messageSnapshots.size > 0;
