@@ -32,6 +32,13 @@ import { Tag } from "../submissions/Tag.js";
 import { PublishCommitMessage } from "../submissions/Publish.js";
 import { safeJoinPath, safeWorkspacePath } from "../utils/SafePath.js";
 
+interface AddOrUpdateEntryOptions {
+    forceNew?: boolean;
+    reprocessImages?: boolean;
+    reanalyzeAttachments?: boolean;
+    forceAttachmentUpload?: boolean;
+}
+
 export class RepositoryManager {
     public folderPath: string;
     private git?: SimpleGit;
@@ -555,7 +562,7 @@ export class RepositoryManager {
                 await this.commit(`Added channel ${channel.name} (${channel.code})`);
             }
 
-            const republishQueue: { entryData: ArchiveEntryData, archiveChannelId: Snowflake }[] = [];
+            const republishQueue: { entryData: ArchiveEntryData, archiveChannelId: Snowflake, options: AddOrUpdateEntryOptions }[] = [];
 
             // Finally, update modified channels
             for (const channel of modifiedChannels) {
@@ -666,7 +673,7 @@ export class RepositoryManager {
                     //await this.git.add(await this.updateEntryReadme(entry));
 
                     // update submission
-                    //await this.addOrUpdateEntryFromData(this.guildHolder, entry.getData(), channel.id, false, false, async () => {});
+                    //await this.addOrUpdateEntryFromData(entry.getData(), channel.id, {}, async () => {});
                 }
 
                 channelInstance.getData().name = channel.name;
@@ -686,7 +693,10 @@ export class RepositoryManager {
                         }
                         republishQueue.push({
                             entryData: deepClone(entry.getData()),
-                            archiveChannelId: channel.id
+                            archiveChannelId: channel.id,
+                            options: {
+                                forceAttachmentUpload: oldChannel.code !== channel.code
+                            }
                         });
                     }
                 }
@@ -732,8 +742,8 @@ export class RepositoryManager {
             //this.configManager.setConfig(RepositoryConfigs.ARCHIVE_CHANNELS, reMapped);
             await this.setChannelReferences(reMapped);
 
-            for (const { entryData, archiveChannelId } of republishQueue) {
-                const result = await this.addOrUpdateEntryFromData(entryData, archiveChannelId, false, false, false, async () => { });
+            for (const { entryData, archiveChannelId, options } of republishQueue) {
+                const result = await this.addOrUpdateEntryFromData(entryData, archiveChannelId, options, async () => { });
                 const submission = await this.guildHolder.getSubmissionsManager().getSubmission(entryData.id);
                 if (submission) {
                     submission.getConfigManager().setConfig(SubmissionConfigs.ARCHIVE_CHANNEL_ID, archiveChannelId);
@@ -1415,7 +1425,10 @@ export class RepositoryManager {
             if (!submissionChannel || !entryData) {
                 throw new Error("Failed to get submission channel or entry data");
             }
-            const result = await this.addOrUpdateEntryFromData(entryData, archiveChannelId, forceNew, reprocessImages, false, async (entryData, imageFolder, attachmentFolder) => {
+            const result = await this.addOrUpdateEntryFromData(entryData, archiveChannelId, {
+                forceNew,
+                reprocessImages
+            }, async (entryData, imageFolder, attachmentFolder) => {
                 // remove all images and attachments that exist in the folder.
 
                 // remove existing files
@@ -1504,13 +1517,17 @@ export class RepositoryManager {
     async addOrUpdateEntryFromData(
         newEntryData: ArchiveEntryData,
         archiveChannelId: Snowflake,
-        forceNew: boolean,
-        reprocessImages: boolean,
-        reanalyzeAttachments: boolean,
+        options: AddOrUpdateEntryOptions,
         moveAttachments: (entryData: ArchiveEntryData, imageFolder: string, attachmentFolder: string) => Promise<void>,
         statusCallback: (status: string) => Promise<void> | void = () => { }
     ): Promise<{ oldEntryData?: ArchiveEntryData, newEntryData: ArchiveEntryData }> {
         const guildHolder = this.guildHolder;
+        const {
+            forceNew = false,
+            reprocessImages = false,
+            reanalyzeAttachments = false,
+            forceAttachmentUpload = false
+        } = options;
         // clone entryData
         newEntryData = deepClone(newEntryData);
 
@@ -1635,7 +1652,7 @@ export class RepositoryManager {
 
         if (existing) {
             const existingData = existing.entry.getData();
-            if (hasAttachmentNameChanged(existingData.attachments, newEntryData.attachments) || existingData.code !== newEntryData.code) {
+            if (forceAttachmentUpload || hasAttachmentNameChanged(existingData.attachments, newEntryData.attachments) || existingData.code !== newEntryData.code) {
                 newEntryData.post.uploadMessageId = '';
             } else if (existingData.post) {
                 newEntryData.post.uploadMessageId = existingData.post.uploadMessageId;
@@ -2069,7 +2086,7 @@ export class RepositoryManager {
                     }
 
                     if (updated && otherData.post) {
-                        await this.addOrUpdateEntryFromData(otherData, otherData.post.forumId, false, false, false, async () => {
+                        await this.addOrUpdateEntryFromData(otherData, otherData.post.forumId, {}, async () => {
                             // do nothing
                         }).catch(e => {
                             console.error("Error updating entry for URL update:", e);

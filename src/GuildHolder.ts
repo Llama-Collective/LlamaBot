@@ -1520,7 +1520,7 @@ export class GuildHolder {
             otherData.author_references = newAuthorReferences;
 
             if (updated && otherData.post) {
-                await this.repositoryManager.addOrUpdateEntryFromData(otherData, otherData.post.forumId, false, false, false, async () => {
+                await this.repositoryManager.addOrUpdateEntryFromData(otherData, otherData.post.forumId, {}, async () => {
                     // do nothing
                 }).catch(e => {
                     console.error("Error updating entry for URL update:", e);

@@ -208,8 +208,8 @@ export class Mwa implements Command {
                     )
                     .addBooleanOption(option =>
                         option
-                            .setName('replace')
-                            .setDescription('Force remaking each thread for image reprocessing')
+                            .setName('upload')
+                            .setDescription('Force re-upload of attachments during republishing')
                     )
                     .addBooleanOption(option =>
                         option
@@ -934,14 +934,15 @@ export class Mwa implements Command {
             }
         }
 
-        const replace = interaction.options.getBoolean('replace') || false;
+        // const replace = interaction.options.getBoolean('replace') || false;
+        const reupload = interaction.options.getBoolean('upload') || false;
         const silent = interaction.options.getBoolean('silent') || false;
         const reanalyze = interaction.options.getBoolean('reanalyze') || false;
         const reprocessImages = interaction.options.getBoolean('images') || false;
 
         await interaction.reply('Starting to republish all entries. This may take a while depending on the size of the archive. You will be notified when it is complete.');
         try {
-            await republishAllEntries(guildHolder, channel, replace, silent, reanalyze, reprocessImages, interaction);
+            await republishAllEntries(guildHolder, channel, reupload, silent, reanalyze, reprocessImages, interaction);
         } catch (error) {
             console.error('Error republishing all entries:', error);
             await interaction.followUp('An error occurred while republishing all entries. Please check the console for details.');
