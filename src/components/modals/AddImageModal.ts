@@ -225,10 +225,10 @@ export class AddImageModal implements Modal {
             flags: MessageFlags.SuppressNotifications
         })
 
-        if (upload.attachments.size > 0) {
-            const uploaded = upload.attachments.first();
-            if (uploaded) {
-                (imageObj as Image).processedUrl = uploaded.url;
+        if (upload.embeds.length === 1) {
+            const uploaded = upload.embeds[0];
+            if (uploaded && uploaded.image?.url) {
+                (imageObj as Image).processedUrl = uploaded.image.url;
                 submission.save();
             }
         }

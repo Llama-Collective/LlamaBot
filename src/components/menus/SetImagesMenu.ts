@@ -232,12 +232,12 @@ export class SetImagesMenu implements Menu {
             components: row ? [row as any] : [],
         }).catch(() => null);
 
-        if (uploaded && uploaded.attachments.size === newImages.length) {
+        if (uploaded && uploaded.embeds.length === newImages.length) {
             for (let i = 0; i < newImages.length; i++) {
-                const uploadedAttachment = uploaded.attachments.at(i);
-                if (uploadedAttachment && uploadedAttachment.name === newImages[i].name) {
+                const uploadedAttachmentEmbed = uploaded.embeds[i];
+                if (uploadedAttachmentEmbed && uploadedAttachmentEmbed.title === escapeDiscordString(newImages[i].name) && uploadedAttachmentEmbed.image?.url) {
                     const image = newImages[i] as Image;
-                    image.processedUrl = uploadedAttachment.url;
+                    image.processedUrl = uploadedAttachmentEmbed.image.url;
                 }
             }
             submission.save();
