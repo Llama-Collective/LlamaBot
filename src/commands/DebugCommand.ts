@@ -93,11 +93,6 @@ export class DebugCommand implements Command {
             )
             .addSubcommand(sub =>
                 sub
-                    .setName('backfillthumbnails')
-                    .setDescription('Populate thumbnailURL from archived post starter messages')
-            )
-            .addSubcommand(sub =>
-                sub
                     .setName('reextract')
                     .setDescription('Force re-run LLM extraction for this submission thread')
             )
@@ -238,9 +233,6 @@ export class DebugCommand implements Command {
                 break;
             case 'fixattachments':
                 await this.handleAttachmentFix(guildHolder, interaction);
-                break;
-            case 'backfillthumbnails':
-                await this.handleBackfillThumbnails(guildHolder, interaction);
                 break;
             case 'reextract':
                 await this.handleReextract(guildHolder, interaction);
@@ -1040,102 +1032,6 @@ export class DebugCommand implements Command {
                 `attachmentFix complete.\n` +
                 `Submissions: ${updatedSubmissions}/${scannedSubmissions} updated, attachments changed ${updatedSubmissionAttachments}/${scannedSubmissionAttachments}.\n` +
                 `Missing files: ${missingFiles}. Errors: ${errors}. Republished: ${republishedSubmissions}.`
-        });
-    }
-
-    private async handleBackfillThumbnails(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-
-        const repositoryManager = guildHolder.getRepositoryManager();
-
-        let scannedPosts = 0;
-        let updatedPosts = 0;
-        let missingPostReferences = 0;
-        let missingThreads = 0;
-        let missingStarterMessages = 0;
-        let missingThumbnails = 0;
-        let errors = 0;
-        let anyRepositoryChange = false;
-
-        await repositoryManager.getLock().acquire();
-        try {
-            await repositoryManager.iterateAllEntries(async (entry) => {
-                scannedPosts++;
-
-                try {
-                    const entryData = entry.getData();
-                    const post = entryData.post;
-
-                    if (!post?.threadId) {
-                        missingPostReferences++;
-                        return;
-                    }
-
-                    const forumChannel = await guildHolder.getGuild().channels.fetch(post.forumId).catch(() => null);
-                    let thread = null;
-                    if (forumChannel && forumChannel.type === ChannelType.GuildForum) {
-                        thread = await forumChannel.threads.fetch(post.threadId).catch(() => null);
-                    }
-
-                    if (!thread) {
-                        const fallbackThread = await guildHolder.getGuild().channels.fetch(post.threadId).catch(() => null);
-                        if (fallbackThread && fallbackThread.isThread()) {
-                            thread = fallbackThread;
-                        }
-                    }
-
-                    if (!thread) {
-                        missingThreads++;
-                        return;
-                    }
-
-                    const starterMessage = await thread.fetchStarterMessage().catch(() => null);
-                    if (!starterMessage) {
-                        missingStarterMessages++;
-                        return;
-                    }
-
-                    const thumbnailURL = starterMessage.attachments.first()?.url;
-                    if (!thumbnailURL) {
-                        missingThumbnails++;
-                        return;
-                    }
-
-                    if (post.thumbnailURL !== thumbnailURL) {
-                        post.thumbnailURL = thumbnailURL;
-                        await entry.savePrivate();
-                        await repositoryManager.add(entry.getDataPath());
-                        updatedPosts++;
-                        anyRepositoryChange = true;
-                    }
-                } catch (error) {
-                    errors++;
-                    console.error(`Failed to backfill thumbnail URL for ${entry.getData().code}:`, error);
-                }
-            });
-
-            if (anyRepositoryChange) {
-                await repositoryManager.commit(`Backfill thumbnail URLs for archived posts (${updatedPosts} updated post${updatedPosts === 1 ? '' : 's'})`);
-                await repositoryManager.push().catch((error) => {
-                    errors++;
-                    console.error('Failed to push backfillthumbnails commit:', error);
-                });
-            }
-        } catch (error: any) {
-            errors++;
-            console.error('Error while backfilling archived post thumbnail URLs:', error);
-            await interaction.editReply({ content: `backfillThumbnails failed: ${error?.message || 'Unknown error'}` });
-            return;
-        } finally {
-            repositoryManager.getLock().release();
-        }
-
-        await interaction.editReply({
-            content:
-                `backfillThumbnails complete.\n` +
-                `Archived posts scanned: ${scannedPosts}. Updated: ${updatedPosts}.\n` +
-                `Missing post references: ${missingPostReferences}. Missing threads: ${missingThreads}. Missing starter messages: ${missingStarterMessages}. Missing thumbnails: ${missingThumbnails}.\n` +
-                `Errors: ${errors}.`
         });
     }
 

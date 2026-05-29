@@ -10,6 +10,7 @@ import { AuthorType } from "../../submissions/Author.js";
 import { SetImagesMenu } from "../menus/SetImagesMenu.js";
 import { EditInfoMultipleButton } from "../buttons/EditInfoMultipleButton.js";
 import { safeJoinPath } from "../../utils/SafePath.js";
+import { Image } from "../../submissions/Image.js";
 
 export class AddImageModal implements Modal {
     getID(): string {
@@ -215,7 +216,7 @@ export class AddImageModal implements Modal {
         const row = new ActionRowBuilder().addComponents(editDescriptionButton);
 
 
-        await interaction.followUp({
+        const upload = await interaction.followUp({
             content: message,
             embeds: [embed],
             files: [file],
@@ -223,6 +224,14 @@ export class AddImageModal implements Modal {
             allowedMentions: { parse: [] },
             flags: MessageFlags.SuppressNotifications
         })
+
+        if (upload.attachments.size > 0) {
+            const uploaded = upload.attachments.first();
+            if (uploaded) {
+                (imageObj as Image).processedUrl = uploaded.url;
+                submission.save();
+            }
+        }
 
         await submission.statusUpdated();
 

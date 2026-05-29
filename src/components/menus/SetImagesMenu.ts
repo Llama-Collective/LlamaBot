@@ -14,6 +14,7 @@ import { SetDescriptionButton } from "../buttons/SetDescriptionButton.js";
 import { SkipDescriptionButton } from "../buttons/SkipDescriptionButton.js";
 import { EditInfoMultipleButton } from "../buttons/EditInfoMultipleButton.js";
 import { safeJoinPath } from "../../utils/SafePath.js";
+import { Image } from "../../submissions/Image.js";
 
 export class SetImagesMenu implements Menu {
     getID(): string {
@@ -222,14 +223,25 @@ export class SetImagesMenu implements Menu {
 
         const row = newImages.length ? new ActionRowBuilder().addComponents(new EditInfoMultipleButton().getBuilder(true)) : null;
 
-        await interaction.followUp({
+        const uploaded = await interaction.followUp({
             content: newImages.length === 0 ? `<@${interaction.user.id}> marked this submission as containing no images` : `<@${interaction.user.id}> set main image${newImages.length > 1 ? 's' : ''} for submission`,
             embeds,
             files,
             flags: [MessageFlags.SuppressNotifications],
             allowedMentions: { parse: [] },
             components: row ? [row as any] : [],
-        }).catch(() => { });
+        }).catch(() => null);
+
+        if (uploaded && uploaded.attachments.size === newImages.length) {
+            for (let i = 0; i < newImages.length; i++) {
+                const uploadedAttachment = uploaded.attachments.at(i);
+                if (uploadedAttachment && uploadedAttachment.name === newImages[i].name) {
+                    const image = newImages[i] as Image;
+                    image.processedUrl = uploadedAttachment.url;
+                }
+            }
+            submission.save();
+        }
 
         await submission.statusUpdated();
 

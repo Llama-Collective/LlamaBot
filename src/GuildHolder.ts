@@ -471,12 +471,16 @@ export class GuildHolder {
     }
 
     public getPostThumbnailURL(entryData: ArchiveEntryData): string | null {
-        if (entryData.post?.thumbnailURL) {
-            return entryData.post.thumbnailURL;
-        }
-
         if (entryData.images.length === 0) {
             return null;
+        }
+
+        if (entryData.images[0].processedUrl) {
+            return entryData.images[0].processedUrl;
+        }
+
+        if (entryData.post?.thumbnailURL) {
+            return entryData.post.thumbnailURL;
         }
 
         return entryData.images[0].url;
