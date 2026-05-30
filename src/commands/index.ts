@@ -14,6 +14,7 @@ import { MoveConvoStartContextCommand } from "./MoveConvoStartContextCommand.js"
 import { Mwa } from "./MwaCommand.js";
 import { DictionaryEditCommand } from "./DictionaryEditCommand.js";
 import { SubscribeCommand } from "./SubscribeCommand.js";
+import { ToggleDncCommand } from "./ToggleDncCommand.js";
 import { ToggleHelper } from "./ToggleHelper.js";
 import { UnsubscribeCommand } from "./UnsubscribeCommand.js";
 import { TopHelpersCommand } from "./TopHelpersCommand.js";
@@ -37,6 +38,7 @@ export function getCommands() {
         new GetStatsCommand(),
         new EditCommand(),
         new ToggleHelper(),
+        new ToggleDncCommand(),
         new MoveConvoStartContextCommand(),
         new MoveConvoEndContextCommand(),
         new MoveConvoCommand(),

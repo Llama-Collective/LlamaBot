@@ -248,6 +248,7 @@ export class Mwa implements Command {
                                 { name: 'Helper role threshold', value: 'helperrolethreshold' },
                                 { name: 'Conversational LLM enabled', value: 'llmenabled' },
                                 { name: 'Conversational LLM channel', value: 'llmchannel' },
+                                { name: 'Editor rotation enabled', value: 'editorrotation' },
                             )
                     )
                     .addStringOption(option =>
@@ -502,7 +503,7 @@ export class Mwa implements Command {
             return;
         }
 
-        if (configName === 'autojoin' || configName === 'autolookup' || configName === 'acknowledgethanks' || configName === 'llmenabled') {
+        if (configName === 'autojoin' || configName === 'autolookup' || configName === 'acknowledgethanks' || configName === 'llmenabled' || configName === 'editorrotation') {
             const normalized = rawValue.toLowerCase();
             if (normalized !== 'true' && normalized !== 'false') {
                 await replyEphemeral(interaction, 'Provide a boolean value (true/false) for this config.');
@@ -515,6 +516,7 @@ export class Mwa implements Command {
                 autolookup: GuildConfigs.AUTOLOOKUP_ENABLED,
                 acknowledgethanks: GuildConfigs.ACKNOWLEDGE_THANKS,
                 llmenabled: GuildConfigs.CONVERSATIONAL_LLM_ENABLED,
+                editorrotation: GuildConfigs.EDITOR_ROTATION_ENABLED,
             } as const;
 
             guildHolder.getConfigManager().setConfig(configMap[configName], value);
@@ -576,7 +578,7 @@ export class Mwa implements Command {
             return;
         }
 
-        await replyEphemeral(interaction, 'Invalid config name. Valid options: autojoin, autolookup, minendorsements, helperrolethreshold, llmenabled, llmchannel.');
+        await replyEphemeral(interaction, 'Invalid config name. Valid options: autojoin, autolookup, minendorsements, helperrolethreshold, llmenabled, llmchannel, editorrotation.');
     }
 
     async setScript(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {

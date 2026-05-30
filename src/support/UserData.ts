@@ -38,5 +38,7 @@ export type UserData = {
     messagesToDeleteOnTimeout?: Snowflake[]; // List of message IDs to delete
 
     llmWarnings: LLMWarning[];
+
+    doNotContact?: boolean; // Whether the user has opted out of automatic contact (e.g. for editors or experienced)
 }
 

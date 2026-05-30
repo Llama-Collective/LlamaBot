@@ -471,6 +471,17 @@ export class Submission {
         const subscriptionManager = this.guildHolder.getUserSubscriptionManager();
         const archiveChannelId = this.getConfigManager().getConfig(SubmissionConfigs.ARCHIVE_CHANNEL_ID);
         const subscribers = await subscriptionManager.getSubscribersForChannel(archiveChannelId);
+
+        // editor rotation
+        if (this.guildHolder.getConfigManager().getConfig(GuildConfigs.EDITOR_ROTATION_ENABLED)) {
+            const nextEditor = await this.guildHolder.getNextEditorForRotation();
+            if (nextEditor) {
+                const message = `An editor has been automatically assigned to this submission: <@${nextEditor.id}>.`;
+                await channel.send({ content: message });
+            }
+        }
+
+
         const members = await this.guildHolder.getGuild().members.fetch({
             user: subscribers
         });

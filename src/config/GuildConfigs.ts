@@ -128,4 +128,8 @@ export const GuildConfigs = {
      * Attachments size warning threshold in bytes
      */
     ATTACHMENT_SIZE_WARNING_THRESHOLD: new Config<number>("attachmentSizeWarningThreshold", 10 * 1024 * 1024), // 10 MB
+
+    EDITOR_ROTATION_ENABLED: new Config<boolean>("editorRotationEnabled", false),
+
+    EDITOR_ROTATION_INDEX: new Config<number>("editorRotationIndex", 0),
 }

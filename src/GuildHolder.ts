@@ -1103,6 +1103,49 @@ export class GuildHolder {
 
     }
 
+    public async getEditors(): Promise<GuildMember[]> {
+        const editorRoles = this.getConfigManager().getConfig(GuildConfigs.EDITOR_ROLE_IDS) || [];
+        const editors: GuildMember[] = [];
+        for (const roleId of editorRoles) {
+            const role = this.guild.roles.cache.get(roleId);
+            if (role) {
+                const membersWithRole = role.members;
+                editors.push(...membersWithRole.values());
+            }
+        }
+
+        // sort by id
+        editors.sort((a, b) => a.id.localeCompare(b.id));
+
+        return editors;
+    }
+
+    public async getNextEditorForRotation(): Promise<GuildMember | null> {
+        const editors = await this.getEditors();
+        if (editors.length === 0) {
+            return null;
+        }
+
+        // filter out editors who have donotcontact true
+        const filteredEditors = [];
+        for (const editor of editors) {
+            const userData = await this.userManager.getUserData(editor.id);
+            if (userData && userData.doNotContact) {
+                continue;
+            }
+            filteredEditors.push(editor);
+        }
+
+        if (filteredEditors.length === 0) {
+            return null;
+        }
+
+        const editorIdx = this.getConfigManager().getConfig(GuildConfigs.EDITOR_ROTATION_INDEX);
+        const editor = filteredEditors[editorIdx % filteredEditors.length];
+        this.getConfigManager().setConfig(GuildConfigs.EDITOR_ROTATION_INDEX, (editorIdx + 1) % filteredEditors.length);
+        return editor;
+    }
+
     public async checkAllUsersForHelperRole() {
         const members = await this.guild.members.fetch();
 
