@@ -1854,11 +1854,6 @@ export class RepositoryManager {
                     files: files.files,
                     allowedMentions: { parse: [] }
                 });
-
-                // const thumbnailURL = resultMessage.attachments.first()?.url;
-                // if (thumbnailURL) {
-                //     newEntryData.post.thumbnailURL = thumbnailURL;
-                // }
             }
 
             // delete temp files

@@ -479,10 +479,6 @@ export class GuildHolder {
             return entryData.images[0].processedUrl;
         }
 
-        if (entryData.post?.thumbnailURL) {
-            return entryData.post.thumbnailURL;
-        }
-
         return entryData.images[0].url;
     }
 

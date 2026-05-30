@@ -12,7 +12,6 @@ export type DiscordPostReference = {
     forumId: Snowflake;
     threadId: Snowflake;
     threadURL: string;
-    thumbnailURL?: string;
     continuingMessageIds: Snowflake[];
     uploadMessageId: Snowflake;
 }
