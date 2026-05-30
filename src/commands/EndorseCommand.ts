@@ -1,9 +1,10 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, InteractionContextType } from "discord.js";
 import { GuildHolder } from "../GuildHolder.js";
 import { Command } from "../interface/Command.js";
-import { isEditor, isEndorser, isModerator, replyEphemeral } from "../utils/Util.js";
+import { isDiscordAuthor, isEditor, isEndorser, isModerator, replyEphemeral } from "../utils/Util.js";
 import { SubmissionConfigs } from "../submissions/SubmissionConfigs.js";
 import { AuthorType } from "../submissions/Author.js";
+import { GuildConfigs } from "../config/GuildConfigs.js";
 
 export class EndorseCommand implements Command {
     getID(): string {
@@ -40,6 +41,19 @@ export class EndorseCommand implements Command {
             replyEphemeral(interaction, 'You can only use this command in a submission channel.');
             return;
         }
+
+        // Check if self endorsement is disallowed
+        const selfEndorsementDisallowed = guildHolder.getConfigManager().getConfig(GuildConfigs.SELF_ENDORSEMENT_DISALLOWED);
+        if (selfEndorsementDisallowed) {
+            const author = submission.getConfigManager().getConfig(SubmissionConfigs.AUTHORS) || [];
+            const isAuthor = author.some(a => isDiscordAuthor(a) && a.id === interaction.user.id);
+
+            if (isAuthor) {
+                replyEphemeral(interaction, 'You cannot endorse your own submission.');
+                return;
+            }
+        }
+        
         // get endorsements
         const endorsements = submission.getConfigManager().getConfig(SubmissionConfigs.ENDORSERS);
         const index = endorsements.findIndex(endorser => endorser.id === interaction.user.id);

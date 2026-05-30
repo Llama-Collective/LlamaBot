@@ -8,7 +8,7 @@ import { LLMResponseStatus } from "../llm/LLMResponseStatus.js";
 import { LLMRequest } from "../llm/LLMRequest.js";
 import { ExtractionPrompt } from "../llm/prompts/ExtractionPrompt.js";
 import { LLMResponse } from "../llm/LLMResponse.js";
-import { extractUserIdsFromText, getAuthorsString, getDiscordAuthorsFromIDs, reclassifyAuthors, splitIntoChunks } from "../utils/Util.js";
+import { extractUserIdsFromText, getAuthorsString, getDiscordAuthorsFromIDs, isDiscordAuthor, reclassifyAuthors, splitIntoChunks } from "../utils/Util.js";
 import { Attachment, BaseAttachment } from "./Attachment.js";
 import { RevisionManager } from "./RevisionManager.js";
 import { Revision, RevisionType } from "./Revision.js";
@@ -265,7 +265,18 @@ export class Submission {
 
         // check endorsers
         if (!withoutEndorsers && this.areEndorsersRequired()) {
-            const endorsers = this.config.getConfig(SubmissionConfigs.ENDORSERS);
+            let endorsers = this.config.getConfig(SubmissionConfigs.ENDORSERS);
+
+            // check if self endorsement is disallowed, if so filter out endorsers that are also authors
+            const selfEndorsementDisallowed = this.guildHolder.getConfigManager().getConfig(GuildConfigs.SELF_ENDORSEMENT_DISALLOWED);
+            if (selfEndorsementDisallowed) {
+                const authors = this.config.getConfig(SubmissionConfigs.AUTHORS) || [];
+                const authorIds = authors.filter(isDiscordAuthor).map(a => a.id);
+                endorsers = endorsers.filter((endorser: any) => {
+                    return !authorIds.includes(endorser.id);
+                });
+            }
+
             const requiredEndorsements = this.getRequiredEndorsementsCount();
 
             if (endorsers.length < requiredEndorsements) {

@@ -132,4 +132,6 @@ export const GuildConfigs = {
     EDITOR_ROTATION_ENABLED: new Config<boolean>("editorRotationEnabled", false),
 
     EDITOR_ROTATION_INDEX: new Config<number>("editorRotationIndex", 0),
+
+    SELF_ENDORSEMENT_DISALLOWED: new Config<boolean>("selfEndorsementDisallowed", false),
 }
