@@ -27,7 +27,7 @@ export class EditorPowersCommand implements Command {
             .addSubcommand(subcommand =>
                 subcommand
                     .setName('lock')
-                    .setDescription('Prevent further edits to a submission')
+                    .setDescription('Prevent republishing a submission')
                     .addStringOption(option =>
                         option.setName('reason')
                             .setDescription('Reason for locking the submission')
@@ -37,7 +37,7 @@ export class EditorPowersCommand implements Command {
             .addSubcommand(subcommand =>
                 subcommand
                     .setName('unlock')
-                    .setDescription('Allow further edits to a submission')
+                    .setDescription('Allow republishing a submission')
             )
             .addSubcommand(subcommand =>
                 subcommand
@@ -205,7 +205,7 @@ export class EditorPowersCommand implements Command {
                 submission.getConfigManager().setConfig(SubmissionConfigs.LOCK_REASON, reason);
                 await submission.statusUpdated();
                 await interaction.reply({
-                    content: `<@${interaction.user.id}> has locked this submission. No further edits are allowed. Reason: ${reason || 'No reason provided'}`,
+                    content: `<@${interaction.user.id}> has locked this submission. Republishing is not allowed. Reason: ${reason || 'No reason provided'}`,
                 });
                 break;
             }
@@ -217,7 +217,7 @@ export class EditorPowersCommand implements Command {
                 submission.getConfigManager().setConfig(SubmissionConfigs.IS_LOCKED, false);
                 await submission.statusUpdated();
                 await interaction.reply({
-                    content: `<@${interaction.user.id}> has unlocked this submission. Further edits are allowed.`,
+                    content: `<@${interaction.user.id}> has unlocked this submission. Republishing is allowed.`,
                 });
                 break;
             case 'hold': {
@@ -322,12 +322,12 @@ export class EditorPowersCommand implements Command {
                 await publishMessage.delete().catch(() => { });
 
                 // await interaction.editReply({
-                //     content: `<@${interaction.user.id}> has published this submission silently! ${url}\nNote that the submission has been locked to prevent further edits. Contact an editor/endorser if you need to make changes.`,
+                //     content: `<@${interaction.user.id}> has published this submission silently! ${url}\nNote that the submission has been locked to prevent republishing. Contact an editor/endorser if it needs to be republished.`,
                 // });
                 const isLocked = submission.getConfigManager().getConfig(SubmissionConfigs.IS_LOCKED);
 
                 const message = `<@${interaction.user.id}> published the submission${silent ? ' silently' : ''}! ${url}`;
-                const lockNote = isLocked ? `\nNote: The submission has been locked to prevent further edits. Please contact an editor/endorser if you need to make changes.` : '';
+                const lockNote = isLocked ? `\nNote: The submission has been locked to prevent republishing. Please contact an editor/endorser if it needs to be republished.` : '';
 
                 const commitMessage = messageDetails.message ? `\nSummary: ${messageDetails.message}` : '';
                 const detailedMessage = messageDetails.detailedDescription ? `\nDetails:\n${messageDetails.detailedDescription}` : '';

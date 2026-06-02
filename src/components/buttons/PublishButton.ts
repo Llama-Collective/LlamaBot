@@ -63,7 +63,7 @@ export class PublishButton implements Button {
         const url = submission.getConfigManager().getConfig(SubmissionConfigs.POST)?.threadURL;
         const isLocked = submission.getConfigManager().getConfig(SubmissionConfigs.IS_LOCKED);
         await interaction.followUp({
-            content: `<@!${interaction.user.id}> published the submission! ${url}` + (isLocked ? `\nNote: The submission has been locked to prevent further edits. Please contact an editor/endorser if you need to make changes.` : ''),
+            content: `<@!${interaction.user.id}> published the submission! ${url}` + (isLocked ? `\nNote: The submission has been locked to prevent republishing. Please contact an editor/endorser if it needs to be republished.` : ''),
         });
     }
 

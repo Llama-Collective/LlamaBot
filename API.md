@@ -114,7 +114,7 @@ type APISubmissionDetails = {
   threadId: string;
   threadUrl: string;
   archiveChannelId: string | null;
-  isLocked: boolean;
+  isLocked: boolean; // true when non-privileged republishing is locked
   lockReason: string;
   onHold: boolean;
   holdReason: string;
@@ -139,6 +139,7 @@ type APISubmissionResponse = {
 Notes:
 
 - `createdMs` and `updatedMs` are numeric timestamps only (milliseconds since epoch).
+- `isLocked` indicates the submission is locked against republishing; it does not mean edits are blocked.
 - In summary results, `authors` and `tags` are string arrays.
 - In full submission results, `authors`, `tags`, `endorsers`, `images`, and `attachments` are full stored objects.
 - `Tag`, `Author`, `DiscordAuthor`, `Image`, and `Attachment` use the same serialized structures as in the archive.

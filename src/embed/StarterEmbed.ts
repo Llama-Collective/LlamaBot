@@ -119,7 +119,7 @@ export class StarterEmbed {
         }
 
         if (configs.getConfig(SubmissionConfigs.IS_LOCKED)) {
-            description += `:lock: The submission is currently locked. Reason: ${configs.getConfig(SubmissionConfigs.LOCK_REASON) || 'No reason provided.'}\n`
+            description += `:lock: The submission is currently locked from republishing. Reason: ${configs.getConfig(SubmissionConfigs.LOCK_REASON) || 'No reason provided.'}\n`
         }
 
         description += `\nLast updated: <t:${Math.floor(Date.now() / 1000)}:F>`

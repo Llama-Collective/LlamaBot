@@ -14,7 +14,6 @@ import { GuildConfigs } from '../config/GuildConfigs.js'
 import { Submission } from '../submissions/Submission.js'
 import { SubmissionConfigs } from '../submissions/SubmissionConfigs.js'
 import { Tag } from '../submissions/Tag.js'
-import { SubmissionStatus } from '../submissions/SubmissionStatus.js'
 import { SubmissionRecord } from './MarkdownUtils.js'
 import { ContextMenuCommand } from '../interface/ContextMenuCommand.js'
 import { getFileKey } from './AttachmentUtils.js'
@@ -582,9 +581,6 @@ export function canEditSubmission(interaction: Interaction, submission: Submissi
         return true;
     }
 
-    if (submission.getConfigManager().getConfig(SubmissionConfigs.IS_LOCKED)) {
-        return false;
-    }
 
     if (isAuthor(interaction, submission)) {
         return true;
@@ -606,7 +602,9 @@ export function canPublishSubmission(interaction: Interaction, submission: Submi
         return true;
     }
 
-    if (submission.getConfigManager().getConfig(SubmissionConfigs.ON_HOLD) || (submission.getConfigManager().getConfig(SubmissionConfigs.STATUS) !== SubmissionStatus.WAITING && submission.getConfigManager().getConfig(SubmissionConfigs.IS_LOCKED))) {
+    const config = submission.getConfigManager();
+
+    if (config.getConfig(SubmissionConfigs.ON_HOLD) || config.getConfig(SubmissionConfigs.IS_LOCKED)) {
         return false;
     }
 

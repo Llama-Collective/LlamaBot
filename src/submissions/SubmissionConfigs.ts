@@ -29,12 +29,12 @@ export const SubmissionConfigs = {
     STATUS: new Config("status", SubmissionStatus.NEW),
 
     /**
-     * Is locked
+     * Prevents republishing the submission
      */
     IS_LOCKED: new Config<boolean>("is_locked", false),
 
     /**
-     * Lock reason
+     * Reason republishing is locked
      */
     LOCK_REASON: new Config<string>("lock_reason", ""),
 

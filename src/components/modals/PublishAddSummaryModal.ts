@@ -104,11 +104,11 @@ export class PublishAddSummaryModal implements Modal {
 
 
         // await interaction.followUp({
-        //     content: `Submission published successfully! ${url}` + (isLocked ? `\nNote: The submission has been locked to prevent further edits. Please contact an editor/endorser if you need to make changes.` : ''),
+        //     content: `Submission published successfully! ${url}` + (isLocked ? `\nNote: The submission has been locked to prevent republishing. Please contact an editor/endorser if it needs to be republished.` : ''),
         // });
 
         const message = `<@${interaction.user.id}> published the submission! ${url}`;
-        const lockNote = isLocked ? `\nNote: The submission has been locked to prevent further edits. Please contact an editor/endorser if you need to make changes.` : '';
+        const lockNote = isLocked ? `\nNote: The submission has been locked to prevent republishing. Please contact an editor/endorser if it needs to be republished.` : '';
 
         const commitMessage = publishMessage.message ? `\nSummary: ${publishMessage.message}` : '';
         const detailedMessage = publishMessage.detailedDescription ? `\nDetails:\n${publishMessage.detailedDescription}` : '';

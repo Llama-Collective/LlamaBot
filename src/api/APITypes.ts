@@ -38,6 +38,7 @@ export type APISubmissionDetails = {
 	threadId: string;
 	threadUrl: string;
 	archiveChannelId: string | null;
+	/** True when non-privileged republishing is locked. */
 	isLocked: boolean;
 	lockReason: string;
 	onHold: boolean;

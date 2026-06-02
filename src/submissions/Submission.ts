@@ -930,7 +930,7 @@ export class Submission {
         this.getConfigManager().setConfig(SubmissionConfigs.STATUS, SubmissionStatus.ACCEPTED);
 
         if (this.areEndorsersRequired()) {
-            this.setLock(true, 'Auto-locked after publish. Please contact an editor/endorser to unlock it if needed.');
+            this.setLock(true, 'Auto-locked after publish to prevent republishing. Please contact an editor/endorser to unlock it if needed.');
         }
 
         await this.statusUpdated();
