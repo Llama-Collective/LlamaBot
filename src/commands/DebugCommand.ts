@@ -1558,7 +1558,7 @@ export class DebugCommand implements Command {
         let changed = false;
         const revisionManager = submission.getRevisionsManager();
         const revisionRefs = revisionManager.getRevisionsList();
-        const thread = await submission.getSubmissionChannel();
+        let thread: Awaited<ReturnType<Submission['getSubmissionChannel']>> | undefined;
 
         for (const revisionRef of revisionRefs) {
             const revision = await revisionManager.getRevisionById(revisionRef.id);
@@ -1579,9 +1579,11 @@ export class DebugCommand implements Command {
 
             await revisionManager.updateRevision(revision);
 
+            thread ??= await submission.getSubmissionChannel();
             if (thread) {
+                const revisionThread = thread;
                 const messages = await Promise.all(revision.messageIds.map(async (messageId) => {
-                    return await thread.messages.fetch(messageId);
+                    return await revisionThread.messages.fetch(messageId);
                 })).catch(() => null);
                 if (messages) {
                     await RevisionEmbed.editRevisionMessages(messages, submission, revision, revisionRef.isCurrent).catch((error) => {
