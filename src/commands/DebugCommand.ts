@@ -2,16 +2,21 @@ import { AttachmentBuilder, ChatInputCommandInteraction, ChannelType, Collection
 import { GuildHolder } from "../GuildHolder.js";
 import { Command } from "../interface/Command.js";
 import { SysAdmin } from "../Bot.js";
-import { getAuthorKey, getAuthorName, replyEphemeral, splitIntoChunks, truncateStringWithEllipsis } from "../utils/Util.js";
+import { areAuthorsSame, deepClone, getAuthorKey, getAuthorName, replyEphemeral, splitIntoChunks, truncateStringWithEllipsis } from "../utils/Util.js";
 import { deleteACAImportThreadsTask, importACAChannelTask, importLRSChannelTask } from "../archive/Tasks.js";
 import { SetTemplateModal } from "../components/modals/SetTemplateModal.js";
-import { Reference, tagReferencesInSubmissionRecords } from "../utils/ReferenceUtils.js";
+import { Reference, ReferenceType, tagReferencesInAcknowledgements, tagReferencesInSubmissionRecords } from "../utils/ReferenceUtils.js";
 import { RevisionEmbed } from "../embed/RevisionEmbed.js";
-import { AuthorType, DiscordAuthor } from "../submissions/Author.js";
+import { Author, AuthorType, DiscordAuthor } from "../submissions/Author.js";
 import { findWorldsInZip, optimizeWorldsInZip } from "../utils/WDLUtils.js";
 import { getFileKey, optimizeImage } from "../utils/AttachmentUtils.js";
 import { GuildConfigs } from "../config/GuildConfigs.js";
 import { DictionaryEntryStatus } from "../archive/DictionaryManager.js";
+import { ArchiveEntryData } from "../archive/ArchiveEntry.js";
+import { BaseAttachment } from "../submissions/Attachment.js";
+import { ArchiveComment } from "../archive/ArchiveComments.js";
+import { Submission } from "../submissions/Submission.js";
+import { NestedListItem, SubmissionRecord, SubmissionRecords } from "../utils/MarkdownUtils.js";
 import got from "got";
 import Path from "path";
 import fs from "fs/promises";
@@ -157,6 +162,23 @@ export class DebugCommand implements Command {
             )
             .addSubcommand(sub =>
                 sub
+                    .setName('swapuser')
+                    .setDescription('Replace one member with another in submissions and archived posts')
+                    .addUserOption(opt =>
+                        opt
+                            .setName('old_member')
+                            .setDescription('Member account to replace')
+                            .setRequired(true)
+                    )
+                    .addUserOption(opt =>
+                        opt
+                            .setName('new_member')
+                            .setDescription('Member account to use instead')
+                            .setRequired(true)
+                    )
+            )
+            .addSubcommand(sub =>
+                sub
                     .setName('optimizewdl')
                     .setDescription('Optimize a WDL zip using MCSelector and return the optimized zip')
                     .addAttachmentOption(opt =>
@@ -251,6 +273,9 @@ export class DebugCommand implements Command {
                 break;
             case 'listauthors':
                 await this.handleListAuthors(guildHolder, interaction);
+                break;
+            case 'swapuser':
+                await this.handleSwapUser(guildHolder, interaction);
                 break;
             case 'optimizewdl':
                 await this.handleOptimizeWdl(guildHolder, interaction);
@@ -1216,6 +1241,472 @@ export class DebugCommand implements Command {
             content: summary,
             files: [attachment]
         });
+    }
+
+    private async handleSwapUser(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+        const oldUser = interaction.options.getUser('old_member', true);
+        const newUser = interaction.options.getUser('new_member', true);
+
+        if (oldUser.id === newUser.id) {
+            await interaction.editReply({ content: 'Old member and new member are the same user.' });
+            return;
+        }
+
+        const guild = guildHolder.getGuild();
+        const newMember = await guild.members.fetch(newUser.id).catch(() => null);
+        if (!newMember) {
+            await interaction.editReply({ content: `New member <@${newUser.id}> is not currently in this guild.` });
+            return;
+        }
+
+        const oldMember = await guild.members.fetch(oldUser.id).catch(() => null);
+        const oldAuthor: DiscordAuthor = oldMember ? {
+            type: AuthorType.DiscordInGuild,
+            id: oldMember.id,
+            username: oldMember.user.username,
+            displayName: oldMember.displayName,
+            iconURL: oldMember.user.displayAvatarURL()
+        } : {
+            type: AuthorType.DiscordExternal,
+            id: oldUser.id,
+            username: oldUser.username,
+            iconURL: oldUser.displayAvatarURL()
+        };
+        const newAuthor: DiscordAuthor = {
+            type: AuthorType.DiscordInGuild,
+            id: newMember.id,
+            username: newMember.user.username,
+            displayName: newMember.displayName,
+            iconURL: newMember.user.displayAvatarURL()
+        };
+
+        const submissionsManager = guildHolder.getSubmissionsManager();
+        const submissionIds = await submissionsManager.getSubmissionsList();
+        let scannedSubmissions = 0;
+        let updatedSubmissions = 0;
+        let archivePostsUpdated = 0;
+        let errors = 0;
+
+        try {
+            for (const submissionId of submissionIds) {
+                scannedSubmissions++;
+                const submission = await submissionsManager.getSubmission(submissionId);
+                if (!submission) {
+                    errors++;
+                    continue;
+                }
+
+                const config = submission.getConfigManager();
+                let changed = false;
+
+                let authors = config.getConfig(SubmissionConfigs.AUTHORS);
+                if (authors) {
+                    let authorsChanged = false;
+                    const authorReferences = config.getConfig(SubmissionConfigs.AUTHORS_REFERENCES);
+                    const swapped = this.swapAuthorsInList(authors, oldAuthor, newAuthor);
+                    if (swapped.changed) {
+                        authors = swapped.list;
+                        authorsChanged = true;
+                    }
+
+                    if (this.swapAuthorReasonMentionSource(authors, oldUser.id, newMember.id)) {
+                        authorsChanged = true;
+                    }
+
+                    const authorReferencesChanged = this.swapUserMentionsInReferences(authorReferences, oldAuthor, newAuthor);
+
+                    if (authorsChanged || authorReferencesChanged) {
+                        config.setConfig(SubmissionConfigs.AUTHORS, authors);
+                        config.setConfig(
+                            SubmissionConfigs.AUTHORS_REFERENCES,
+                            await tagReferencesInAcknowledgements(authors, authorReferences, guildHolder, submission.getId())
+                        );
+                        changed = true;
+                    }
+                }
+
+                const endorsers = config.getConfig(SubmissionConfigs.ENDORSERS);
+                const swappedEndorsers = this.swapAuthorsInList(endorsers, oldAuthor, newAuthor);
+                if (swappedEndorsers.changed) {
+                    config.setConfig(SubmissionConfigs.ENDORSERS, swappedEndorsers.list as DiscordAuthor[]);
+                    changed = true;
+                }
+
+                if (!authors && this.swapUserMentionsInReferences(config.getConfig(SubmissionConfigs.AUTHORS_REFERENCES), oldAuthor, newAuthor)) {
+                    const authorReferences = config.getConfig(SubmissionConfigs.AUTHORS_REFERENCES);
+                    config.setConfig(SubmissionConfigs.AUTHORS_REFERENCES, authorReferences);
+                    changed = true;
+                }
+
+                const images = config.getConfig(SubmissionConfigs.IMAGES);
+                if (images && this.swapAttachmentAuthors(images, oldAuthor, newAuthor)) {
+                    config.setConfig(SubmissionConfigs.IMAGES, images);
+                    changed = true;
+                }
+
+                const attachments = config.getConfig(SubmissionConfigs.ATTACHMENTS);
+                if (attachments && this.swapAttachmentAuthors(attachments, oldAuthor, newAuthor)) {
+                    config.setConfig(SubmissionConfigs.ATTACHMENTS, attachments);
+                    changed = true;
+                }
+
+                if (await this.swapRevisionAuthors(submission, oldAuthor, newAuthor, oldUser.id, newMember.id, guildHolder)) {
+                    changed = true;
+                }
+
+                if (!changed) {
+                    continue;
+                }
+
+                await submission.statusUpdated();
+                await submission.save();
+                updatedSubmissions++;
+            }
+
+            const repositoryManager = guildHolder.getRepositoryManager();
+            await repositoryManager.getLock().acquire();
+            try {
+                const archiveOnlyUpdates: {
+                    data: ArchiveEntryData;
+                    forumId: Snowflake;
+                    comments: ArchiveComment[] | null;
+                    commentsFile: string;
+                    commentsChanged: boolean;
+                }[] = [];
+                await repositoryManager.iterateAllEntries(async (entry) => {
+                    const data = deepClone(entry.getData());
+
+                    let changed = false;
+                    const swappedAuthors = this.swapAuthorsInList(data.authors || [], oldAuthor, newAuthor);
+                    if (swappedAuthors.changed) {
+                        data.authors = swappedAuthors.list;
+                        changed = true;
+                    }
+
+                    const authorReasonChanged = this.swapAuthorReasonMentionSource(data.authors || [], oldUser.id, newMember.id);
+                    const authorReferencesChanged = this.swapUserMentionsInReferences(data.author_references || [], oldAuthor, newAuthor);
+                    if (authorReasonChanged || authorReferencesChanged) {
+                        data.author_references = await tagReferencesInAcknowledgements(data.authors || [], data.author_references || [], guildHolder, data.id);
+                        changed = true;
+                    }
+
+                    const swappedEndorsers = this.swapAuthorsInList(data.endorsers || [], oldAuthor, newAuthor);
+                    if (swappedEndorsers.changed) {
+                        data.endorsers = swappedEndorsers.list;
+                        changed = true;
+                    }
+
+                    const recordSourceChanged = this.swapSubmissionRecordMentionSource(data.records || {}, oldUser.id, newMember.id);
+                    const referencesChanged = this.swapUserMentionsInReferences(data.references || [], oldAuthor, newAuthor);
+                    if (recordSourceChanged || referencesChanged) {
+                        data.references = await tagReferencesInSubmissionRecords(data.records, data.references || [], guildHolder, data.id);
+                        changed = true;
+                    }
+
+                    if (this.swapAttachmentAuthors(data.images || [], oldAuthor, newAuthor)) {
+                        changed = true;
+                    }
+
+                    if (this.swapAttachmentAuthors(data.attachments || [], oldAuthor, newAuthor)) {
+                        changed = true;
+                    }
+
+                    const commentsFile = safeJoinPath(entry.getFolderPath(), 'comments.json');
+                    const comments = await this.loadArchiveComments(commentsFile);
+                    const commentsChanged = comments ? this.swapCommentAuthors(comments, oldAuthor, newAuthor) : false;
+                    changed = changed || commentsChanged;
+
+                    if (!changed) {
+                        return;
+                    }
+
+                    if (!data.post?.forumId) {
+                        errors++;
+                        return;
+                    }
+
+                    data.updatedAt = Date.now();
+                    archiveOnlyUpdates.push({ data, forumId: data.post.forumId, comments, commentsFile, commentsChanged });
+                });
+
+                for (const update of archiveOnlyUpdates) {
+                    if (update.commentsChanged && update.comments) {
+                        await fs.writeFile(update.commentsFile, JSON.stringify(update.comments, null, 2), 'utf-8');
+                        await repositoryManager.add(update.commentsFile);
+                    }
+                    const result = await repositoryManager.addOrUpdateEntryFromData(
+                        update.data,
+                        update.forumId,
+                        {},
+                        async () => { }
+                    );
+                    const submission = await submissionsManager.getSubmission(update.data.id);
+                    if (submission) {
+                        repositoryManager.updateSubmissionFromEntryData(submission, result.newEntryData);
+                        await submission.save();
+                    }
+                    archivePostsUpdated++;
+                }
+
+                if (archivePostsUpdated > 0) {
+                    await repositoryManager.buildPersistentIndexAndEmbeddings();
+                    await repositoryManager.commit(`Swap member ${oldUser.username} (${oldUser.id}) to ${newMember.user.username} (${newMember.id})`);
+                    await repositoryManager.push().catch((e: any) => {
+                        console.error('Error pushing swapuser archive-only changes:', e.message || e);
+                    });
+                }
+            } finally {
+                repositoryManager.getLock().release();
+            }
+        } catch (error: any) {
+            errors++;
+            console.error('Error swapping users:', error);
+            await interaction.editReply({ content: `swapuser failed: ${error?.message || 'Unknown error'}` });
+            return;
+        }
+
+        await interaction.editReply({
+            content:
+                `swapuser complete: replaced <@${oldUser.id}> with <@${newMember.id}>.\n` +
+                `Submissions: ${updatedSubmissions}/${scannedSubmissions} updated. ` +
+                `Archive posts: ${archivePostsUpdated}. Errors: ${errors}.`
+        });
+    }
+
+    private swapAuthorsInList<T extends Author>(authors: T[], oldAuthor: DiscordAuthor, newAuthor: DiscordAuthor): { changed: boolean; list: T[] } {
+        let changed = false;
+        const swappedList = authors.map(author => {
+            if (!areAuthorsSame(author, oldAuthor)) {
+                return author;
+            }
+
+            changed = true;
+            return this.makeReplacementAuthor(author, newAuthor);
+        });
+
+        const list: T[] = [];
+        for (const author of swappedList) {
+            const existing = list.find(existingAuthor => areAuthorsSame(existingAuthor, author));
+            if (!existing) {
+                list.push(author);
+                continue;
+            }
+
+            if (!existing.reason && author.reason) {
+                existing.reason = author.reason;
+            } else if (existing.reason && author.reason && existing.reason !== author.reason) {
+                existing.reason = `${existing.reason}\n${author.reason}`;
+            }
+            existing.dontDisplay = !!existing.dontDisplay && !!author.dontDisplay;
+            changed = true;
+        }
+
+        return { changed, list };
+    }
+
+    private swapUserMentionsInReferences(references: Reference[], oldAuthor: DiscordAuthor, newAuthor: DiscordAuthor): boolean {
+        let changed = false;
+        for (const reference of references) {
+            if (reference.type !== ReferenceType.USER_MENTION || !areAuthorsSame(reference.user, oldAuthor)) {
+                continue;
+            }
+
+            reference.user = this.makeReplacementAuthor(reference.user, newAuthor);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private swapAttachmentAuthors<T extends BaseAttachment>(attachments: T[], oldAuthor: DiscordAuthor, newAuthor: DiscordAuthor): boolean {
+        let changed = false;
+        for (const attachment of attachments) {
+            if (!areAuthorsSame(attachment.author, oldAuthor)) {
+                continue;
+            }
+
+            attachment.author = this.makeReplacementAuthor(attachment.author, newAuthor);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private swapCommentAuthors(comments: ArchiveComment[], oldAuthor: DiscordAuthor, newAuthor: DiscordAuthor): boolean {
+        let changed = false;
+        for (const comment of comments) {
+            if (areAuthorsSame(comment.sender, oldAuthor)) {
+                comment.sender = this.makeReplacementAuthor(comment.sender, newAuthor);
+                changed = true;
+            }
+
+            if (this.swapAttachmentAuthors(comment.attachments || [], oldAuthor, newAuthor)) {
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private async swapRevisionAuthors(
+        submission: Submission,
+        oldAuthor: DiscordAuthor,
+        newAuthor: DiscordAuthor,
+        oldUserId: Snowflake,
+        newUserId: Snowflake,
+        guildHolder: GuildHolder
+    ): Promise<boolean> {
+        let changed = false;
+        const revisionManager = submission.getRevisionsManager();
+        const revisionRefs = revisionManager.getRevisionsList();
+        const thread = await submission.getSubmissionChannel();
+
+        for (const revisionRef of revisionRefs) {
+            const revision = await revisionManager.getRevisionById(revisionRef.id);
+            if (!revision) {
+                continue;
+            }
+
+            const recordsChanged = this.swapSubmissionRecordMentionSource(revision.records, oldUserId, newUserId);
+            const referencesChanged = this.swapUserMentionsInReferences(revision.references || [], oldAuthor, newAuthor);
+
+            if (!recordsChanged && !referencesChanged) {
+                continue;
+            }
+
+            if (recordsChanged || referencesChanged) {
+                revision.references = await tagReferencesInSubmissionRecords(revision.records, revision.references || [], guildHolder, submission.getId());
+            }
+
+            await revisionManager.updateRevision(revision);
+
+            if (thread) {
+                const messages = await Promise.all(revision.messageIds.map(async (messageId) => {
+                    return await thread.messages.fetch(messageId);
+                })).catch(() => null);
+                if (messages) {
+                    await RevisionEmbed.editRevisionMessages(messages, submission, revision, revisionRef.isCurrent).catch((error) => {
+                        console.error(`Error updating revision messages for revision ${revision.id}:`, error);
+                    });
+                }
+            }
+
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private swapAuthorReasonMentionSource(authors: Author[], oldUserId: Snowflake, newUserId: Snowflake): boolean {
+        let changed = false;
+        for (const author of authors) {
+            if (!author.reason) {
+                continue;
+            }
+
+            const updated = this.replaceUserMentionSource(author.reason, oldUserId, newUserId);
+            if (updated === author.reason) {
+                continue;
+            }
+
+            author.reason = updated;
+            changed = true;
+        }
+        return changed;
+    }
+
+    private swapSubmissionRecordMentionSource(records: SubmissionRecords, oldUserId: Snowflake, newUserId: Snowflake): boolean {
+        let changed = false;
+
+        for (const key of Object.keys(records)) {
+            const record = records[key];
+            const result = this.swapSubmissionRecordValueMentionSource(record, oldUserId, newUserId);
+            if (!result.changed) {
+                continue;
+            }
+
+            records[key] = result.record;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private swapSubmissionRecordValueMentionSource(
+        record: SubmissionRecord,
+        oldUserId: Snowflake,
+        newUserId: Snowflake
+    ): { changed: boolean; record: SubmissionRecord } {
+        if (typeof record === 'string') {
+            const updated = this.replaceUserMentionSource(record, oldUserId, newUserId);
+            return { changed: updated !== record, record: updated };
+        }
+
+        let changed = false;
+        const updated = record.map(item => {
+            if (typeof item === 'string') {
+                const newItem = this.replaceUserMentionSource(item, oldUserId, newUserId);
+                if (newItem !== item) {
+                    changed = true;
+                }
+                return newItem;
+            }
+
+            if (this.swapNestedListMentionSource(item, oldUserId, newUserId)) {
+                changed = true;
+            }
+            return item;
+        });
+
+        return { changed, record: updated };
+    }
+
+    private swapNestedListMentionSource(item: NestedListItem, oldUserId: Snowflake, newUserId: Snowflake): boolean {
+        let changed = false;
+        const title = this.replaceUserMentionSource(item.title, oldUserId, newUserId);
+        if (title !== item.title) {
+            item.title = title;
+            changed = true;
+        }
+
+        item.items = item.items.map(child => {
+            if (typeof child === 'string') {
+                const newChild = this.replaceUserMentionSource(child, oldUserId, newUserId);
+                if (newChild !== child) {
+                    changed = true;
+                }
+                return newChild;
+            }
+
+            if (this.swapNestedListMentionSource(child, oldUserId, newUserId)) {
+                changed = true;
+            }
+            return child;
+        });
+
+        return changed;
+    }
+
+    private replaceUserMentionSource(text: string, oldUserId: Snowflake, newUserId: Snowflake): string {
+        return text.replace(new RegExp(`<@!?${oldUserId}>`, 'g'), `<@${newUserId}>`);
+    }
+
+    private async loadArchiveComments(commentsFile: string): Promise<ArchiveComment[] | null> {
+        try {
+            return JSON.parse(await fs.readFile(commentsFile, 'utf-8')) as ArchiveComment[];
+        } catch (error: any) {
+            if (error?.code !== 'ENOENT') {
+                console.error(`Error reading comments file ${commentsFile}:`, error);
+            }
+            return null;
+        }
+    }
+
+    private makeReplacementAuthor<T extends Author>(oldAuthor: T, newAuthor: DiscordAuthor): T {
+        return {
+            ...newAuthor,
+            reason: oldAuthor.reason,
+            dontDisplay: oldAuthor.dontDisplay
+        } as T;
     }
 
     private async handleOptimizeWdl(_guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
