@@ -7,6 +7,9 @@ import { LiftTimeoutButton } from "../components/buttons/LiftTimeoutButton.js";
 import { AttachmentsState, UserData } from "./UserData.js";
 import { replyEphemeral, truncateStringWithEllipsis } from "../utils/Util.js";
 
+ 
+const RENEW_WINDOW_MS = 15 * 24 * 60 * 60 * 1000; // 15 days - if user sends a message after verifying butbefore expiry and within this window, renew their verification without requiring them to click the button again.
+const VERIFICATION_EXPIRY_MS = 2 * 30 * 24 * 60 * 60 * 1000; // 2 months - how long a verification lasts before expiring if no activity from the user.
 
 type MessageRef = {
     channelId: Snowflake;
@@ -288,7 +291,7 @@ export class AntiSpamSystem {
 
         userData.attachmentsAllowedState = AttachmentsState.ALLOWED;
         userData.messagesToDeleteOnTimeout = [];
-        userData.attachmentsAllowedExpiry = Date.now() + (6 * 30 * 24 * 60 * 60 * 1000);
+        userData.attachmentsAllowedExpiry = Date.now() + VERIFICATION_EXPIRY_MS;
         try {
             await this.guildHolder.getUserManager().saveUserData(userData);
         } catch (error) {
@@ -550,8 +553,8 @@ export class AntiSpamSystem {
         const userData = await this.guildHolder.getUserManager().getOrCreateUserData(message.author.id, message.author.username);
         if (userData.attachmentsAllowedState === AttachmentsState.ALLOWED) {
             const now = Date.now();
-            if (!userData.attachmentsAllowedExpiry || (userData.attachmentsAllowedExpiry < now + 30 * 24 * 60 * 60 * 1000 && userData.attachmentsAllowedExpiry > now)) {
-                userData.attachmentsAllowedExpiry = now + 6 * 30 * 24 * 60 * 60 * 1000;
+            if (!userData.attachmentsAllowedExpiry || (userData.attachmentsAllowedExpiry < now + RENEW_WINDOW_MS && userData.attachmentsAllowedExpiry > now)) {
+                userData.attachmentsAllowedExpiry = now + VERIFICATION_EXPIRY_MS;
                 await this.guildHolder.getUserManager().saveUserData(userData);
             }
 
