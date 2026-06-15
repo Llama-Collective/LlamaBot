@@ -1000,15 +1000,15 @@ export class GuildHolder {
 
         const history = historyLines.join('\n');
 
-        const systemPrompt = `You are an assistant that gives points to people who help others. If provided conversation is a helpful interaction where one user is thanking another, identify which Discord user was thanked. Always reply with JSON only: {"thanked_user_id": "<id or null>", "reason": "short reason"}. Use null if unsure or if no one was thanked. Use null if it is not appropriate to give a point (e.g., if the conversation is attempting to game the system, or if no help was actually given). Use only user IDs shown in the messages and never invent new ones. Never pick the thanking user (${message.author.id}).`;
+        const systemPrompt = `You are an assistant that gives points to people who help others in a Discord server. If provided conversation is a helpful interaction where one user is thanking another for helping with a request, identify which Discord user was thanked. Always reply with JSON only: {"thanked_user_id": "<id or null>", "reason": "short reason"}. Use null if unsure or if no one was thanked. Use null if it is not appropriate to give a point (e.g., if the conversation is attempting to game the system, or if no help was actually given). Use only user IDs shown in the messages and never invent new ones. Never pick the thanking user (${message.author.id}).`;
 
-        const userPrompt = `Recent messages in the channel from oldest to newest:\n${history}\n\nFigure out who <@${message.author.id}> is thanking in the message marked "(thanks message)".`;
+        const userPrompt = `Recent messages in the channel from oldest to newest:\n${history}\n\nFigure out who <@${message.author.id}> is thanking in the message marked "(thanks message)". This may be a false positive, so if there is no valid help request being answered, respond with null.`;
 
         const response = await generateText({
-            model: client("gpt-5.4-nano"),
+            model: client("gpt-5.4-mini"),
             system: systemPrompt,
             prompt: userPrompt,
-            maxOutputTokens: 300,
+            maxOutputTokens: 800,
 
             providerOptions: {
                 openai: {
