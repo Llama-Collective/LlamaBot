@@ -1,4 +1,4 @@
-import { AttachmentBuilder, ChatInputCommandInteraction, ChannelType, Collection, ForumChannel, GuildForumTag, GuildMember, InteractionContextType, MessageFlags, SlashCommandBuilder, Snowflake, PermissionFlagsBits } from "discord.js";
+import { AttachmentBuilder, ChatInputCommandInteraction, ChannelType, Collection, ForumChannel, GuildForumTag, GuildMember, InteractionContextType, MessageFlags, SlashCommandBuilder, Snowflake, SnowflakeUtil, PermissionFlagsBits } from "discord.js";
 import { GuildHolder } from "../GuildHolder.js";
 import { Command } from "../interface/Command.js";
 import { SysAdmin } from "../Bot.js";
@@ -162,6 +162,11 @@ export class DebugCommand implements Command {
             )
             .addSubcommand(sub =>
                 sub
+                    .setName('submissions')
+                    .setDescription('Export every submission as a CSV, ordered by creation date')
+            )
+            .addSubcommand(sub =>
+                sub
                     .setName('swapuser')
                     .setDescription('Replace one member with another in submissions and archived posts')
                     .addUserOption(opt =>
@@ -273,6 +278,9 @@ export class DebugCommand implements Command {
                 break;
             case 'listauthors':
                 await this.handleListAuthors(guildHolder, interaction);
+                break;
+            case 'submissions':
+                await this.handleSubmissionsExport(guildHolder, interaction);
                 break;
             case 'swapuser':
                 await this.handleSwapUser(guildHolder, interaction);
@@ -1239,6 +1247,74 @@ export class DebugCommand implements Command {
 
         await interaction.editReply({
             content: summary,
+            files: [attachment]
+        });
+    }
+
+    private async handleSubmissionsExport(guildHolder: GuildHolder, interaction: ChatInputCommandInteraction) {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+        const submissionsManager = guildHolder.getSubmissionsManager();
+        const submissionIds = await submissionsManager.getSubmissionsList();
+
+        type SubmissionRow = {
+            created: number;
+            updated: number | null;
+            status: string;
+            name: string;
+            authors: string;
+        };
+
+        const rows: SubmissionRow[] = [];
+        let errors = 0;
+
+        for (const submissionId of submissionIds) {
+            const submission = await submissionsManager.getSubmission(submissionId);
+            if (!submission) {
+                errors++;
+                continue;
+            }
+
+            const config = submission.getConfigManager();
+            const status = config.getConfig(SubmissionConfigs.STATUS);
+            const name = config.getConfig(SubmissionConfigs.NAME) || '';
+            const authors = config.getConfig(SubmissionConfigs.AUTHORS) || [];
+            const authorsString = authors.map(author => getAuthorName(author)).join(' | ');
+
+            // Creation date is derived from the submission thread's snowflake ID.
+            const created = Number(SnowflakeUtil.timestampFrom(submissionId));
+
+            // Latest update date is the last time submission.json was written to disk.
+            const configPath = safeJoinPath(submission.getFolderPath(), 'submission.json');
+            const stats = await fs.stat(configPath).catch(() => null);
+            const updated = stats ? stats.mtimeMs : null;
+
+            rows.push({ created, updated, status, name, authors: authorsString });
+        }
+
+        // Order by creation date, oldest first.
+        rows.sort((a, b) => a.created - b.created);
+
+        const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+        const formatDate = (ts: number | null) => (ts ? new Date(ts).toISOString() : '');
+
+        const csvLines = [
+            'Creation Date,Latest Update Date,Status,Name,Authors',
+            ...rows.map(row => [
+                escapeCsv(formatDate(row.created)),
+                escapeCsv(formatDate(row.updated)),
+                escapeCsv(row.status),
+                escapeCsv(row.name),
+                escapeCsv(row.authors),
+            ].join(','))
+        ];
+
+        const buffer = Buffer.from(csvLines.join('\n'));
+        const attachment = new AttachmentBuilder(buffer, { name: `submissions-${guildHolder.getGuild().id}.csv` });
+
+        const errorText = errors > 0 ? ` (${errors} could not be loaded)` : '';
+        await interaction.editReply({
+            content: `Exported ${rows.length} submission${rows.length === 1 ? '' : 's'}${errorText}.`,
             files: [attachment]
         });
     }
