@@ -92,10 +92,10 @@ export class DebugCommand implements Command {
             //         .setName('attachhashes')
             //         .setDescription('Compute attachment hashes for archived posts and submissions')
             // )
-            .addSubcommand(sub =>
-                sub.setName('fixattachments')
-                    .setDescription('Fix missing attachments in archived posts and submissions by re-downloading them from Discord')
-            )
+            // .addSubcommand(sub =>
+            //     sub.setName('fixattachments')
+            //         .setDescription('Fix missing attachments in archived posts and submissions by re-downloading them from Discord')
+            // )
             .addSubcommand(sub =>
                 sub
                     .setName('reextract')
