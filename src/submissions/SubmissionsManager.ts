@@ -80,6 +80,8 @@ export class SubmissionsManager {
                         this.submissions.delete(oldestSubmission.getId());
                     }
                 }
+            } catch (e) {
+                console.error('Error loading submission:', e);
             } finally {
                 // Always clear pending-load state to avoid permanently stuck IDs.
                 this.submissionPromises.delete(id);

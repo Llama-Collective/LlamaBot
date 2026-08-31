@@ -554,6 +554,7 @@ export class Submission {
 
     public async statusUpdated() {
         try {
+            await this.checkStatusMessage(); // very very very rarely, for some reason status message gets sent but the id is not saved. This is a safeguard against that.
             const statusMessageId = this.config.getConfig(SubmissionConfigs.STATUS_MESSAGE_ID);
             if (!statusMessageId) {
                 throw new Error('Status message not sent yet!');
