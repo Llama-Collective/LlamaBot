@@ -1005,7 +1005,7 @@ export class GuildHolder {
         const userPrompt = `Recent messages in the channel from oldest to newest:\n${history}\n\nFigure out who <@${message.author.id}> is thanking in the message marked "(thanks message)". This may be a false positive, so if there is no valid help request being answered, respond with null.`;
 
         const response = await generateText({
-            model: client("gpt-5.4-mini"),
+            model: client("gpt-6-luna"),
             system: systemPrompt,
             prompt: userPrompt,
             maxOutputTokens: 800,
@@ -1866,7 +1866,7 @@ export class GuildHolder {
         const specialQuestions = ['who is right', 'is this true', 'translate'];
         if (specialQuestions.some(q => message.content.toLowerCase().includes(q))) {
             contextLength = 50; // more context for "who is right" questions
-            model = this.bot.openAIClient("gpt-5.4-mini"); // use better model for complex questions
+            model = this.bot.openAIClient("gpt-6.1-sol"); // use better model for complex questions
             const specialPromptLines = [
                 sharedPrompt,
                 'You are reviewing conflicting or high-risk claims, so double-check every statement with the facts tool or other resources before responding.',
@@ -1876,7 +1876,7 @@ export class GuildHolder {
             systemPrompt = specialPromptLines.join('\n\n');
         } else {
             contextLength = 10;
-            model = this.bot.openAIClient("gpt-5.4-nano"); // use faster model for normal questions
+            model = this.bot.openAIClient("gpt-6.1-terra"); // use faster model for normal questions
             const defaultPromptLines = [
                 sharedPrompt,
                 `You are talking in a channel called #${channelName}.`,

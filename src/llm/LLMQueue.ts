@@ -152,7 +152,7 @@ export class LLMQueue {
         }
 
         const result = await generateText({
-            model: paidLLMClient("gpt-5.4-nano"),
+            model: paidLLMClient("gpt-6-luna"),
             output: Output.object({
                 schema: jsonSchema(this.toOpenAIStrictSchema(request.schema))
             }),
