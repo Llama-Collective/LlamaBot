@@ -155,7 +155,7 @@ const ARTIFICIAL_BLOCKS = [
 ];
 
 const MC_SELECTOR_QUERY = `InhabitedTime = 0 AND !(Palette intersects "${ARTIFICIAL_BLOCKS.join(',')}")`;
-const MC_SELECTOR_JAR = safeJoinPath(process.cwd(), 'java', 'mcaselector-2.7.jar');
+const MC_SELECTOR_JAR = safeJoinPath(process.cwd(), 'java', 'mcaselector-2.9.jar');
 
 export type WorldMetadata = {
     path: string; // always relative to root zip; nested zips separated by '/'
