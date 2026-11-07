@@ -1040,6 +1040,37 @@ export function getAttachmentCategory(attachment: Attachment): AttachmentCategor
     return 'other';
 }
 
+const CREA_VIEWER_URL = 'https://crea.llamamc.org/';
+// Unlocks the Crea beta for a single page load; stops working when the beta ends (2026-12-01 05:00 UTC).
+const CREA_TEMP_KEY = 'llamabot-beta';
+const LEGACY_VIEWER_URL = 'https://llamamc.org/renderer?url=';
+// Discord's limit for link URLs; past it, fall back to the shorter legacy renderer link.
+const MAX_VIEWER_URL_LENGTH = 512;
+
+/**
+ * Builds a "View Schematic" link that opens the file in Crea.
+ * fileUrl must be a direct, CORS-enabled download (raw/media.githubusercontent.com)
+ * whose last path segment is the file name with its extension.
+ */
+export function getCreaURL(fileUrl: string): string {
+    let normalizedFileUrl = fileUrl;
+    try {
+        // Percent-encode any raw characters (spaces etc.) in the file path itself.
+        normalizedFileUrl = new URL(fileUrl).href;
+    } catch {
+        // Leave as-is; searchParams will still encode it.
+    }
+
+    const link = new URL(CREA_VIEWER_URL);
+    link.searchParams.set('url', normalizedFileUrl);
+    link.searchParams.set('temp_key', CREA_TEMP_KEY);
+
+    if (link.href.length <= MAX_VIEWER_URL_LENGTH) {
+        return link.href;
+    }
+    return LEGACY_VIEWER_URL + fileUrl;
+}
+
 export type AttachmentPostMessageOptions = {
     uploadedURL?: string;
     githubLink?: string | null;
@@ -1052,6 +1083,9 @@ export function getAttachmentPostMessage(
     const timestamp = `<t:${Math.floor(attachment.timestamp / 1000)}:s>`;
     const uploadedURL = options.uploadedURL || attachment.url;
     const githubMirror = options.githubLink ? ` [[Github Mirror]](${options.githubLink})` : '';
+    const viewerLink = options.githubLink
+            ? ` [[View]](${getCreaURL(options.githubLink)})`
+            : '';
 
     let message = '';
     if (attachment.contentType === 'bilibili') {
@@ -1066,17 +1100,11 @@ export function getAttachmentPostMessage(
     } else if (attachment.contentType === 'mediafire') {
         message = `- [${escapeDiscordString(attachment.name)}](${attachment.url}): Mediafire link, ${timestamp}\n`;
     } else if (attachment.litematic) {
-        const viewerLink = options.githubLink
-            ? ` [[View Schematic]](https://llamamc.org/renderer?url=${options.githubLink})`
-            : '';
         message = `- ${uploadedURL}${viewerLink}: MC ${attachment.litematic?.version || "Version Unknown"}, Size ${attachment.litematic?.size || "Unknown"}, ${timestamp}\n`;
     } else if (attachment.schematic) {
-        const viewerLink = options.githubLink
-            ? ` [[View Schematic]](https://llamamc.org/renderer?url=${options.githubLink})`
-            : '';
         message = `- ${uploadedURL}${viewerLink}: MC ${attachment.schematic?.version || "Version Unknown"}, Size ${attachment.schematic?.size || "Unknown"}, ${timestamp}\n`;
     } else if (attachment.wdl) {
-        message = `- ${uploadedURL}${githubMirror}: MC ${attachment.wdl?.version || "Version Unknown"}, ${timestamp}\n`;
+        message = `- ${uploadedURL}${viewerLink}: MC ${attachment.wdl?.version || "Version Unknown"}, ${timestamp}\n`;
     } else if (attachment.image) {
         message = `- ${uploadedURL}${githubMirror}: Image, ${attachment.image.width}x${attachment.image.height}, ${timestamp}\n`;
     } else if (isAttachmentVideo(attachment)) {
