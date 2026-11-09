@@ -4,7 +4,7 @@ Base URL (production):
 
 `https://botapi.llamamc.org`
 
-All endpoints require bearer auth.
+All endpoints require bearer auth, except attachment downloads requested from `https://crea.llamamc.org` (see below).
 
 ## Authentication
 
@@ -277,8 +277,14 @@ Response:
 ```
 
 ### GET `/server/:serverId/submission/:submissionId/attachments/:attachmentId`
+Also available as `/server/:serverId/submission/:submissionId/attachments/:attachmentId/:fileName` (the file name is ignored; it lets viewers detect the file type from the URL).
 
 Returns attachment content.
+
+Crea access:
+
+- Requests with `Origin: https://crea.llamamc.org` do not need a bearer token for this endpoint, and get CORS headers (`Access-Control-Allow-Origin`, preflight `OPTIONS` support).
+- The bot links to this endpoint from the `[[View]]` buttons in submission attachment messages.
 
 Behavior:
 

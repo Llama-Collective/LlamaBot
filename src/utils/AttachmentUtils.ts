@@ -1071,6 +1071,34 @@ export function getCreaURL(fileUrl: string): string {
     return LEGACY_VIEWER_URL + fileUrl;
 }
 
+// Public base URL of the bot API (APIServer). Crea is allowed to fetch attachment files from it without auth.
+const BOT_API_PUBLIC_URL = (process.env.API_PUBLIC_URL?.trim() || 'https://botapi.llamamc.org').replace(/\/+$/, '');
+
+/**
+ * Direct download URL for a submission attachment served by the bot API.
+ * The file name is appended as the last path segment so Crea can detect the file type.
+ */
+export function getSubmissionAttachmentApiURL(serverId: string, submissionId: string, attachment: Attachment): string {
+    return `${BOT_API_PUBLIC_URL}/server/${encodeURIComponent(serverId)}/submission/${encodeURIComponent(submissionId)}/attachments/${encodeURIComponent(attachment.id)}/${encodeURIComponent(attachment.name)}`;
+}
+
+/**
+ * Whether the attachment is a schematic, litematic or world download that Crea can open.
+ */
+export function isAttachmentViewable(attachment: Attachment): boolean {
+    if (!attachment.canDownload) return false;
+    if (attachment.litematic) return !attachment.litematic.error;
+    if (attachment.schematic) return !attachment.schematic.error;
+    if (attachment.wdl) return !attachment.wdl.error;
+    return false;
+}
+
+export type AttachmentSetMessageOptions = {
+    // When set, viewable attachments get a [[View]] link to Crea served via the bot API.
+    serverId?: string;
+    submissionId?: string;
+};
+
 export type AttachmentPostMessageOptions = {
     uploadedURL?: string;
     githubLink?: string | null;
@@ -1126,7 +1154,7 @@ export function getAttachmentPostMessage(
     return message;
 }
 
-export function getAttachmentSetMessage(attachment: Attachment): string {
+export function getAttachmentSetMessage(attachment: Attachment, options: AttachmentSetMessageOptions = {}): string {
     const timestamp = `<t:${Math.floor(attachment.timestamp / 1000)}:s>`;
     const sizeSuffix = typeof attachment.size === 'number' ? `, ${formatSize(attachment.size)}${attachment.unoptimizedSize && attachment.unoptimizedSize !== attachment.size ? ` (was ${formatSize(attachment.unoptimizedSize)})` : ''}` : '';
     let linkOrName = `[${escapeDiscordString(escapeString(attachment.name))}](${attachment.url})`;
@@ -1144,6 +1172,10 @@ export function getAttachmentSetMessage(attachment: Attachment): string {
         } else {
             linkOrName = attachment.url;
         }
+    }
+
+    if (options.serverId && options.submissionId && isAttachmentViewable(attachment)) {
+        linkOrName += ` [[View]](${getCreaURL(getSubmissionAttachmentApiURL(options.serverId, options.submissionId, attachment))})`;
     }
 
     let message = '';
@@ -1181,7 +1213,7 @@ export function getAttachmentSetMessage(attachment: Attachment): string {
     return message;
 }
 
-export function getAttachmentsSetMessage(attachments: Attachment[]): string {
+export function getAttachmentsSetMessage(attachments: Attachment[], options: AttachmentSetMessageOptions = {}): string {
     if (attachments.length === 0) {
         return 'No attachments set.';
     }
@@ -1218,42 +1250,42 @@ export function getAttachmentsSetMessage(attachments: Attachment[]): string {
     if (litematics.length) {
         description += '**Litematics:**\n'
         litematics.forEach(attachment => {
-            description += getAttachmentSetMessage(attachment);
+            description += getAttachmentSetMessage(attachment, options);
         })
     }
 
     if (schematics.length) {
         description += '**Schematics:**\n'
         schematics.forEach(attachment => {
-            description += getAttachmentSetMessage(attachment);
+            description += getAttachmentSetMessage(attachment, options);
         })
     }
 
     if (wdls.length) {
         description += '**WDLs:**\n'
         wdls.forEach(attachment => {
-            description += getAttachmentSetMessage(attachment);
+            description += getAttachmentSetMessage(attachment, options);
         })
     }
 
     if (videos.length) {
         description += '**Videos:**\n'
         videos.forEach(attachment => {
-            description += getAttachmentSetMessage(attachment);
+            description += getAttachmentSetMessage(attachment, options);
         })
     }
 
     if (images.length) {
         description += '**Images:**\n'
         images.forEach(attachment => {
-            description += getAttachmentSetMessage(attachment);
+            description += getAttachmentSetMessage(attachment, options);
         })
     }
 
     if (others.length) {
         description += '**Other files:**\n'
         others.forEach(attachment => {
-            description += getAttachmentSetMessage(attachment);
+            description += getAttachmentSetMessage(attachment, options);
         })
     }
     return description;

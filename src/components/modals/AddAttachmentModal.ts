@@ -254,7 +254,10 @@ export class AddAttachmentModal implements Modal {
         await SetAttachmentsMenu.sendAttachmentsMenuAndButton(submission, interaction, true);
 
 
-        let message = `<@${interaction.user.id}> added attachment:\n${getAttachmentSetMessage(attachmentObj)}`;
+        let message = `<@${interaction.user.id}> added attachment:\n${getAttachmentSetMessage(attachmentObj, {
+            serverId: guildHolder.getGuild().id,
+            submissionId: submission.getId(),
+        })}`;
 
         const editDescriptionButton = new EditInfoMultipleButton().getBuilder(false);
         const row = new ActionRowBuilder().addComponents(editDescriptionButton);

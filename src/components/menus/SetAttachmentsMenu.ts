@@ -196,7 +196,10 @@ export class SetAttachmentsMenu implements Menu {
             rows.push(new ActionRowBuilder().addComponents(new EditInfoMultipleButton().getBuilder(false)));
         }
 
-        let description = `Attachments set by <@${interaction.user.id}>:\n\n` + getAttachmentsSetMessage(newAttachmentsProcessed);
+        let description = `Attachments set by <@${interaction.user.id}>:\n\n` + getAttachmentsSetMessage(newAttachmentsProcessed, {
+            serverId: submission.getGuildHolder().getGuild().id,
+            submissionId: submission.getId(),
+        });
 
         const split = splitIntoChunks(description, 2000);
 

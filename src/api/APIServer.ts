@@ -27,6 +27,9 @@ import { safeResolvePathOrNull } from "../utils/SafePath.js";
 const DEFAULT_PORT = 4938;
 const DEFAULT_HOST = "127.0.0.1";
 const DISCORD_EPOCH = 1_420_070_400_000n;
+// Origins allowed to fetch attachment files without a bearer token (the Crea schematic viewer).
+const PUBLIC_ATTACHMENT_ORIGINS = new Set(["https://crea.llamamc.org"]);
+const ATTACHMENT_PATH_PATTERN = /^\/server\/[^/]+\/submission\/[^/]+\/attachments\/[^/]+(?:\/[^/]+)?\/?$/;
 
 function parsePort(value: string | undefined): number {
 	if (!value) return DEFAULT_PORT;
@@ -82,8 +85,31 @@ export class APIServer {
 	private configureApp(): void {
 		this.app.disable("x-powered-by");
 
+		this.app.use((req: Request, res: Response, next: NextFunction) => {
+			res.vary("Origin");
+			if (!this.isPublicAttachmentOrigin(req)) {
+				next();
+				return;
+			}
+
+			res.setHeader("Access-Control-Allow-Origin", req.header("origin")!);
+			res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Length, Content-Type");
+			if (req.method === "OPTIONS") {
+				res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+				res.setHeader("Access-Control-Allow-Headers", req.header("access-control-request-headers") || "");
+				res.setHeader("Access-Control-Max-Age", "86400");
+				res.status(204).end();
+				return;
+			}
+			next();
+		});
+
 		this.app.use(async (req: Request, res: Response, next: NextFunction) => {
 			try {
+				if (this.isPublicAttachmentRequest(req)) {
+					next();
+					return;
+				}
 				const isAuthed = await this.authenticate(req, res);
 				if (!isAuthed) return;
 				next();
@@ -116,7 +142,11 @@ export class APIServer {
 			await this.handleGetSubmission(serverId, submissionId, res);
 		});
 
-		this.app.get("/server/:serverId/submission/:submissionId/attachments/:attachmentId", async (req: Request, res: Response) => {
+		// The optional trailing file name is ignored; it lets viewers like Crea detect the file type from the URL.
+		this.app.get([
+			"/server/:serverId/submission/:submissionId/attachments/:attachmentId",
+			"/server/:serverId/submission/:submissionId/attachments/:attachmentId/:fileName"
+		], async (req: Request, res: Response) => {
 			const serverId = this.getParam(req.params.serverId);
 			const submissionId = this.getParam(req.params.submissionId);
 			const attachmentId = this.getParam(req.params.attachmentId);
@@ -139,6 +169,21 @@ export class APIServer {
 			if (res.headersSent) return;
 			this.respondError(res, 500, "Internal Server Error");
 		});
+	}
+
+	private isPublicAttachmentOrigin(req: Request): boolean {
+		const origin = req.header("origin");
+		return !!origin && PUBLIC_ATTACHMENT_ORIGINS.has(origin);
+	}
+
+	/**
+	 * Attachment downloads requested from an allowed viewer origin skip bearer auth.
+	 * Note: Origin can be forged by non-browser clients, so this makes attachment files effectively public.
+	 */
+	private isPublicAttachmentRequest(req: Request): boolean {
+		return (req.method === "GET" || req.method === "HEAD")
+			&& this.isPublicAttachmentOrigin(req)
+			&& ATTACHMENT_PATH_PATTERN.test(req.path);
 	}
 
 	private async authenticate(req: Request, res: Response): Promise<boolean> {
